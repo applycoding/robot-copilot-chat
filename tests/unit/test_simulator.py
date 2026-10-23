@@ -35,7 +35,14 @@ def test_frame_count_and_endpoints(ctx):
     for leg in rep.resolved.legs:
         if leg.duration_s <= 0:
             continue
-        math.ceil(leg.duration_s / dt)
+        expected = math.ceil(leg.duration_s / dt) + 1
+        leg_frames = [
+            f
+            for f in sim.frames
+            if abs(f.x_m - leg.end.x_m) < 1e-6 or abs(f.y_m - leg.end.y_m) < 1e-6
+        ]
+        assert len(leg_frames) >= 1
+        assert expected >= 1
         # endpoints appear in frame stream
         assert any(
             abs(f.x_m - leg.end.x_m) < 1e-9 and abs(f.y_m - leg.end.y_m) < 1e-9 for f in sim.frames

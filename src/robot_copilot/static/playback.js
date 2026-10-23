@@ -18,7 +18,12 @@ function setTelemetry(i) {
   if (tel) {
     tel.dataset.frameIndex = String(i);
     const f = frames[i];
-    if (f && f.at_home && f.landed) {
+    if (
+      f &&
+      f.event === "land" &&
+      Math.abs(f.x_m) < 1e-6 &&
+      Math.abs(f.y_m) < 1e-6
+    ) {
       tel.textContent = "landed at home";
     }
   }
@@ -40,7 +45,12 @@ export function initPlayback(run) {
   frames = run.frames || [];
   index = 0;
   setStatus("idle");
-  renderFrame(0);
+  setExecPath("");
+  const f0 = frames[0];
+  if (f0) {
+    setMarker(f0.x_m, f0.y_m);
+    setTelemetry(0);
+  }
 }
 
 document.getElementById("step-btn")?.addEventListener("click", () => {

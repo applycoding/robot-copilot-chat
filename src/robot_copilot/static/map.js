@@ -1,9 +1,6 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 export function initMap(points) {
-  const svg = document.getElementById("map-svg");
-  if (!svg) return;
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
   const path = document.getElementById("plan-path");
   if (!path || !Array.isArray(points) || points.length === 0) {
     if (path) path.setAttribute("d", "");

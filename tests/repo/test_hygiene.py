@@ -33,14 +33,25 @@ def test_readme_sections():
     readme = (ROOT / "README.md").read_text()
     for heading in (
         "## Safety model",
-        "## Quickstart",
+        "## Quickstart (60 seconds)",
+        "## Try these phrases",
         "## Docker",
+        "## Use a real LLM",
+        "## Architecture",
+        "## Safety rules",
+        "## Configure your own site",
+        "## Project layout",
         "## Testing",
         "## CI",
         "## Tutorial",
+        "## Out of scope / disclaimer",
         "## License and author",
     ):
         assert heading in readme
+    assert "mermaid" in readme
+    assert "\u2014" not in readme and "\u2013" not in readme
+    for i in range(17):
+        assert f"{i:02d}-" in readme or f"docs/tutorial/{i:02d}-" in readme
 
 
 def test_screenshots_exist():

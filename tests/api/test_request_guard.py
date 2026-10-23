@@ -50,7 +50,8 @@ def test_body_too_large(guarded_client: TestClient):
         content=big,
         headers={"Content-Type": "application/json"},
     )
-    assert r.status_code in (413, 422)
+    assert r.status_code == 413
+    assert r.json()["detail"]["code"] == "payload_too_large"
     assert guarded_client.spy.calls == 0  # type: ignore[attr-defined]
 
 

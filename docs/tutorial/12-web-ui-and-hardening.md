@@ -1,21 +1,38 @@
-# 12-web-ui-and-hardening.md
+# 12 UI, CSP, and request guard
 
 ## Goal
 
+Learn how **ui, csp, and request guard** fits into robot-copilot-chat: the LLM proposes, the validator decides, and a human confirms before simulation.
+
 ## Concepts
 
+- Typed `MissionPlan` actions are the only executable input.
+- Validation is pure, deterministic, and uses full floating-point precision.
+- The mock provider makes local development and CI possible without API keys.
+- Loopback-only exposure and request guards reduce attack surface for this demo.
+
 ## Files
+
+- `src/robot_copilot/templates/index.html`
+- `src/robot_copilot/static/app.js`
+- `src/robot_copilot/security.py`
 
 ## Run it
 
+```bash
+uv sync --locked
+# Verify CSP on `/` and POST guard behavior.
+uv run --no-sync uvicorn --factory robot_copilot.main:create_app --reload
+```
+
 ## Checkpoint
+
+- `tests/api/test_request_guard.py::test_bad_host`
+- `tests/api/test_xss.py`
 
 ## Exercises
 
-## Files
+1. Run the checkpoint tests with `uv run --no-sync pytest <node-id> -q`.
+2. Change one config value and predict which test should fail first.
+3. Skim `PLAN.md` for the matching section and compare it to the code you opened.
 
-- `src/robot_copilot/main.py`
-
-## Checkpoint
-
-- `tests/api/test_healthz.py::test_healthz`

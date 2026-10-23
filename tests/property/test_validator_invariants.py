@@ -11,7 +11,7 @@ from tests.property.generators import constructive_valid_mission, fuzz_plan
 def test_fuzz_deterministic_json():
     rng = random.Random(20261023)
     ctx = load_ctx()
-    for _ in range(200):
+    for _ in range(1000):
         data = fuzz_plan(rng)
         try:
             plan = plan_from_json(data)
