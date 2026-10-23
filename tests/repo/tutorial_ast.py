@@ -33,9 +33,9 @@ def extract_segment(repo_root: Path, rel_path: str, qualname: str) -> SourceSegm
                 if depth == len(parts) - 1:
                     return node
                 return find_in_body(node.body, depth + 1)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
-                if depth == len(parts) - 1:
-                    return node
+            is_func = isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            if is_func and node.name == name and depth == len(parts) - 1:
+                return node
         return None
 
     node = find_in_body(tree.body, 0)
@@ -43,7 +43,13 @@ def extract_segment(repo_root: Path, rel_path: str, qualname: str) -> SourceSegm
         raise ValueError(f"{qualname} not found in {rel_path}")
     lines = src.splitlines()
     text = "\n".join(lines[node.lineno - 1 : node.end_lineno]) + "\n"
-    return SourceSegment(path=path, qualname=qualname, lineno=node.lineno, end_lineno=node.end_lineno, text=text)
+    return SourceSegment(
+        path=path,
+        qualname=qualname,
+        lineno=node.lineno,
+        end_lineno=node.end_lineno,
+        text=text,
+    )
 
 
 def assert_segment_rules(seg: SourceSegment) -> None:

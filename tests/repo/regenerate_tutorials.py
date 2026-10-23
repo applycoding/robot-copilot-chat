@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 from tests.repo.tutorial_ast import assert_segment_rules, extract_segment
