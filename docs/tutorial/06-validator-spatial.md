@@ -79,4 +79,4 @@ Record spatial issue codes from a fly to substation chat and compare with flyove
 
 ## Checkpoint
 
-- `tests/unit/test_spatial.py::test_substation_keepout`
+- `tests/unit/test_spatial.py::test_segment_keepouts_hit_lists_every_zone_on_one_leg`

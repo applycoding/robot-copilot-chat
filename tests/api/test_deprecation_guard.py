@@ -17,11 +17,10 @@ def bare_client() -> TestClient:
 
 
 def test_httpx_data_body_emits_deprecation_warning(bare_client: TestClient) -> None:
-    with pytest.raises(DeprecationWarning, match="content="):
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
-            bare_client.post(
-                "/api/chat",
-                data="x",
-                headers={"Content-Type": "text/plain"},
-            )
+    with pytest.raises(DeprecationWarning, match="content="), warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        bare_client.post(
+            "/api/chat",
+            data="x",
+            headers={"Content-Type": "text/plain"},
+        )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from robot_copilot.validator import validate
-from robot_copilot.validator.issues import IssueCode, XYZ
+from robot_copilot.validator.issues import XYZ, IssueCode
 from robot_copilot.validator.spatial import segment_keepouts_hit
 from tests.helpers import plan_from_json
 
