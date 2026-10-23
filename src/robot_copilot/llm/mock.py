@@ -239,9 +239,7 @@ class MockProvider:
                     new_loops = max(1, loops // (2**attempt))
                     actions = _patrol_wrapped(new_loops, request.vehicle)
                     if new_loops < loops:
-                        plan_dict["summary"] = (
-                            f"Patrol perimeter ({new_loops} of {loops} loops)"
-                        )
+                        plan_dict["summary"] = f"Patrol perimeter ({new_loops} of {loops} loops)"
                         adjustment_notice = (
                             f"Repair shortened the patrol from {loops} loops to {new_loops}. "
                             "Review the updated plan before you confirm."
