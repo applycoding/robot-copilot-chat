@@ -1,0 +1,124 @@
+{
+  "aborted_runs": 0,
+  "audit_kinds": [
+    "proposed",
+    "validated",
+    "confirm_rejected",
+    "confirmed",
+    "executed",
+    "confirm_rejected",
+    "proposed",
+    "repair_requested",
+    "validated",
+    "confirmed",
+    "executed",
+    "proposed",
+    "repair_requested",
+    "declined",
+    "proposed",
+    "validated",
+    "superseded",
+    "proposed",
+    "confirm_rejected",
+    "repair_requested",
+    "validated",
+    "confirmed",
+    "executed",
+    "proposed",
+    "repair_requested",
+    "validated",
+    "confirmed",
+    "executed",
+    "proposed",
+    "repair_requested",
+    "repair_requested",
+    "validated",
+    "confirmed",
+    "executed",
+    "proposed",
+    "repair_requested",
+    "declined",
+    "declined",
+    "proposed",
+    "repair_requested",
+    "validated",
+    "confirm_rejected",
+    "superseded",
+    "proposed",
+    "repair_requested",
+    "repair_requested",
+    "repair_failed"
+  ],
+  "executed_runs": 5,
+  "frames_sha256": "205b9ee7dc802824ee6221966662470ba576ccac1c905b3b05b5b0a857c059af",
+  "mission_status_histogram": {
+    "declined": 3,
+    "executed": 5,
+    "repair_exhausted": 1,
+    "superseded": 2
+  },
+  "run_count": 5,
+  "runs": [
+    {
+      "final_state": {
+        "alt_m": 0.0,
+        "at_home": true,
+        "battery_wh": 79.694947,
+        "landed": true,
+        "x_m": 0.0,
+        "y_m": 0.0
+      },
+      "photos": 3,
+      "status": "executed"
+    },
+    {
+      "final_state": {
+        "alt_m": 0.0,
+        "at_home": true,
+        "battery_wh": 76.968508,
+        "landed": true,
+        "x_m": 0.0,
+        "y_m": 0.0
+      },
+      "photos": 1,
+      "status": "executed"
+    },
+    {
+      "final_state": {
+        "alt_m": 0.0,
+        "at_home": true,
+        "battery_wh": 85.907848,
+        "landed": true,
+        "x_m": 0.0,
+        "y_m": 0.0
+      },
+      "photos": 0,
+      "status": "executed"
+    },
+    {
+      "final_state": {
+        "alt_m": 0.0,
+        "at_home": true,
+        "battery_wh": 394.629757,
+        "landed": true,
+        "x_m": 0.0,
+        "y_m": 0.0
+      },
+      "photos": 0,
+      "status": "executed"
+    },
+    {
+      "final_state": {
+        "alt_m": 0.0,
+        "at_home": true,
+        "battery_wh": 20.141216,
+        "landed": true,
+        "x_m": 0.0,
+        "y_m": 0.0
+      },
+      "photos": 0,
+      "status": "executed"
+    }
+  ],
+  "total_photos": 4
+}

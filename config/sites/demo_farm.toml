@@ -1,0 +1,55 @@
+[site]
+id = "demo-farm"
+name = "Applycoding Demo Farm"
+home = [0.0, 0.0]
+geofence = [[-200,-150],[250,-150],[250,300],[-200,300]]
+geofence_margin_m = 5.0
+
+[[keep_out]]
+name = "Substation"
+polygon = [[-160,100],[-120,100],[-120,140],[-160,140]]
+margin_m = 10.0
+
+[[keep_out]]
+name = "Beehives"
+polygon = [[135,75],[165,75],[165,105],[135,105]]
+margin_m = 10.0
+
+[[places]]
+name = "North Fence"
+aliases = ["northern fence"]
+kind = "path"
+points = [[-180,280],[20,285],[230,280]]
+
+[[places]]
+name = "Perimeter"
+aliases = ["fence line", "boundary"]
+kind = "path"
+points = [[-180,-130],[230,-130],[230,280],[-180,280],[-180,-130]]
+
+[[places]]
+name = "Barn"
+kind = "point"
+points = [[-90,60]]
+
+[[places]]
+name = "Pond"
+kind = "point"
+points = [[110,-50]]
+
+[[places]]
+name = "Orchard"
+kind = "point"
+points = [[-60,220]]
+
+[[places]]
+name = "Solar Array"
+aliases = ["solar panels"]
+kind = "point"
+points = [[200,40]]
+
+[[places]]
+name = "South Gate"
+aliases = ["gate"]
+kind = "point"
+points = [[0,-140]]

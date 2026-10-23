@@ -163,8 +163,8 @@ stateDiagram-v2
 | anthropic | `claude-sonnet-5-5` | `claude-opus-5-5`, `claude-haiku-5-5` |
 | openai | `gpt-6.1-sol` | `gpt-6-astra`, `gpt-6-luna` |
 | gemini | `gemini-3.8-flash` | `gemini-4-argon`, `gemini-3.5-flash-lite` |
-| xai | `grok-4.7` | — |
-| mock | `mock-1` | — |
+| xai | `grok-4.7` | n/a |
+| mock | `mock-1` | n/a |
 
 **Not used (deliberately):**
 
@@ -1491,7 +1491,7 @@ Simulator semantics (`test_simulator.py`):
 
 **Long recorded scenario** (`tests/scenario/test_farm_day.py`)
 
-It replays `farm_day.json` (28 steps) through `TestClient` with `FakeClock`, `CounterIds` and file-backed SQLite. Each step asserts its expected HTTP status, `kind`, mission status, revision, issue codes and attempt count.
+It replays `farm_day.json` (32 scripted HTTP actions covering the 28 logical beats in the table below) through `TestClient` with `FakeClock`, `CounterIds` and file-backed SQLite. Each step asserts its expected HTTP status, `kind`, mission status, revision, issue codes and attempt count.
 
 | Step | Action | Expected |
 |---|---|---|
