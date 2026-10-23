@@ -22,6 +22,7 @@ _NUMBER_WORDS = {
     "ten": 10,
 }
 
+
 def _canonical_place(summary: SiteSummary, raw: str) -> str:
     norm = normalize_name(raw)
     for place in summary.places:

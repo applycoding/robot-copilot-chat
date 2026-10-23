@@ -10,7 +10,7 @@ def test_xss_inert(page, base_url):
     page.goto(base_url)
     for payload in (
         '<img src=x onerror="window.__xss=1">',
-        "</script><svg onload=\"window.__xss=1\">",
+        '</script><svg onload="window.__xss=1">',
     ):
         page.locator('[data-testid="chat-input"]').fill(payload)
         page.locator('[data-testid="send-btn"]').click()

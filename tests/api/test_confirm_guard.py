@@ -55,9 +55,7 @@ def test_tampered_report_json_does_not_change_frames(client):
     ph = r.json()["mission"]["plan_hash"]
     store = client.app.state.orchestrator._store
     with Session(store._engine) as session:
-        rev = session.exec(
-            select(MissionRevision).where(MissionRevision.mission_id == mid)
-        ).first()
+        rev = session.exec(select(MissionRevision).where(MissionRevision.mission_id == mid)).first()
         assert rev and rev.report_json
         report = json.loads(rev.report_json)
         if report.get("resolved") and report["resolved"].get("legs"):
@@ -77,9 +75,7 @@ def test_tampered_plan_json_revalidation_failed(client):
     ph = r.json()["mission"]["plan_hash"]
     store = client.app.state.orchestrator._store
     with Session(store._engine) as session:
-        rev = session.exec(
-            select(MissionRevision).where(MissionRevision.mission_id == mid)
-        ).first()
+        rev = session.exec(select(MissionRevision).where(MissionRevision.mission_id == mid)).first()
         assert rev and rev.plan_json
         plan = json.loads(rev.plan_json)
         plan["actions"].insert(1, {"type": "goto", "place": "No Such Place"})
