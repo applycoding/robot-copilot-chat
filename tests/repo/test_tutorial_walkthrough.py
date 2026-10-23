@@ -5,8 +5,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TUTORIAL = ROOT / "docs/tutorial"
-SECTIONS = ["## Files", "## Exercise", "## Checkpoint"]
+SECTIONS = [
+    "## Goal",
+    "## Files",
+    "## Walkthrough",
+    "## Try it",
+    "## Exercise",
+    "## Checkpoint",
+]
 _PY_FENCE = re.compile(r"```python\n(.*?)```", re.DOTALL)
+_BOILERPLATE = "This chapter ties to the integration story"
+
+
+def _prose_words(text: str) -> int:
+    without_code = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+    return len(re.findall(r"\w+", without_code))
 
 
 def test_tutorial_files():
@@ -14,10 +27,20 @@ def test_tutorial_files():
         matches = list(TUTORIAL.glob(f"{i:02d}-*.md"))
         assert matches, i
         text = matches[0].read_text()
+        assert _BOILERPLATE not in text, matches[0].name
         for sec in SECTIONS:
             assert sec in text, f"{matches[0].name} missing {sec}"
-        words = len(re.findall(r"\w+", text))
-        assert 235 <= words <= 950, f"{matches[0].name} word count {words}"
+        prose = _prose_words(text)
+        assert 350 <= prose <= 750, f"{matches[0].name} prose word count {prose}"
+
+
+def test_tutorial_excerpt_count():
+    for path in sorted(TUTORIAL.glob("*.md")):
+        blocks = _PY_FENCE.findall(path.read_text())
+        if path.name.startswith("00-"):
+            assert len(blocks) >= 1, path.name
+        else:
+            assert len(blocks) >= 2, f"{path.name} needs >=2 python excerpts, got {len(blocks)}"
 
 
 def test_tutorial_referenced_paths_exist():
