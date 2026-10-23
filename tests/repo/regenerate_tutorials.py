@@ -15,10 +15,7 @@ TRY_EXPECTED = Path(__file__).with_name("tutorial_try_expected.json")
 
 
 def _segment_fence(rel: str, qualname: str, text: str) -> str:
-    return (
-        f"<!-- segment: {rel} {qualname} -->\n\n"
-        f"```python\n{text.rstrip()}\n```\n"
-    )
+    return f"<!-- segment: {rel} {qualname} -->\n\n```python\n{text.rstrip()}\n```\n"
 
 
 def _try_section(bash: str, expected: list[str], note: str = "") -> str:
