@@ -19,7 +19,8 @@ def test_smoke_flow(page, base_url):
     page.locator('[data-testid="confirm-btn"]').click()
     dialog = page.locator('[data-testid="confirm-dialog"]')
     expect(dialog).to_be_visible()
-    expect(page.locator('[data-testid="confirm-summary"]')).to_contain_text("north fence", ignore_case=True)
+    summary = page.locator('[data-testid="confirm-summary"]')
+    expect(summary).to_contain_text("north fence", ignore_case=True)
 
     page.locator('[data-testid="execute-btn"]').click()
     expect(status).to_contain_text("executed", timeout=15_000)

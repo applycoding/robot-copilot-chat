@@ -6,7 +6,7 @@ import re
 from robot_copilot.llm.base import ProposalRequest, ProviderResult, render_repair_message
 from robot_copilot.llm.normalize import normalize
 from robot_copilot.site import normalize_name
-from robot_copilot.tools import DECLINE_TOOL, PROPOSE_TOOL
+from robot_copilot.tools import DECLINE_TOOL, PROPOSE_TOOL, SiteSummary
 from robot_copilot.validator.issues import IssueCode
 
 _NUMBER_WORDS = {
@@ -21,6 +21,17 @@ _NUMBER_WORDS = {
     "nine": 9,
     "ten": 10,
 }
+
+def _canonical_place(summary: SiteSummary, raw: str) -> str:
+    norm = normalize_name(raw)
+    for place in summary.places:
+        if normalize_name(str(place.get("name", ""))) == norm:
+            return str(place["name"])
+        for alias in place.get("aliases", []):
+            if normalize_name(str(alias)) == norm:
+                return str(place["name"])
+    return raw
+
 
 _DECLINE_ISSUES = {
     IssueCode.UNKNOWN_PLACE,
@@ -77,18 +88,19 @@ class MockProvider:
         if m:
             place = m.group(2).strip()
             alt = float(m.group(3)) if m.group(3) else None
+            place = _canonical_place(request.site_summary, place)
             body = _inspect_place(place, alt, vehicle, request.site_summary)
-            return self._wrap_plan(body, vehicle, f"Inspect {place}")
+            return self._wrap_plan(body, vehicle, f"Inspect {place}", rover_alt=alt)
 
         m = re.search(r"\b(take a )?(photo|picture) of the (.+)$", text)
         if m:
-            place = m.group(3).strip()
+            place = _canonical_place(request.site_summary, m.group(3).strip())
             body = _photo_place(place, vehicle)
             return self._wrap_plan(body, vehicle, f"Photo of {place}")
 
         m = re.search(r"\bhover (over|at) the (.+?) for (\d+(?:\.\d+)?)\s*s", text)
         if m:
-            place = m.group(2).strip()
+            place = _canonical_place(request.site_summary, m.group(2).strip())
             seconds = float(m.group(3))
             body = [{"type": "goto", "place": place}, {"type": "hover", "seconds": seconds}]
             return self._wrap_plan(body, vehicle, f"Hover at {place}")
@@ -114,7 +126,7 @@ class MockProvider:
             if am:
                 alt = float(am.group(1))
                 rest = rest[: am.start()].strip()
-            place = rest
+            place = _canonical_place(request.site_summary, rest)
             goto: dict[str, object] = {"type": "goto", "place": place}
             if alt is not None:
                 goto["altitude_m"] = alt
@@ -123,7 +135,7 @@ class MockProvider:
             body = [goto]
             if vehicle == "drone":
                 body.append({"type": "hover", "seconds": 5})
-            return self._wrap_plan(body, vehicle, f"Go to {place}")
+            return self._wrap_plan(body, vehicle, f"Go to {place}", rover_alt=alt)
 
         help_text = (
             "Try: inspect the north fence; patrol the perimeter twice; "
@@ -134,11 +146,18 @@ class MockProvider:
         )
 
     def _wrap_plan(
-        self, body: list[dict[str, object]], vehicle: str, summary: str
+        self,
+        body: list[dict[str, object]],
+        vehicle: str,
+        summary: str,
+        *,
+        rover_alt: float | None = None,
     ) -> ProviderResult:
         actions: list[dict[str, object]] = []
         if vehicle == "drone":
             actions.append({"type": "takeoff", "altitude_m": 30.0})
+        elif vehicle == "rover" and rover_alt is not None:
+            actions.append({"type": "takeoff", "altitude_m": rover_alt})
         actions.extend(body)
         actions.append({"type": "return_home"})
         plan = {"vehicle": vehicle, "summary": summary, "actions": actions}

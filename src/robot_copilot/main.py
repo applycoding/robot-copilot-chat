@@ -40,8 +40,7 @@ def create_app(
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
     clock_fn = clock or (lambda: datetime.now(tz=UTC))
-    ids = id_factory or _default_ids()
-    store = Store.from_url(settings.db_url, clock_fn, ids)
+    store = Store.from_url(settings.db_url, clock_fn, id_factory)
     prov = provider or build_provider(settings)
     configure_redaction(settings.api_key)
     install_redact_filter()
@@ -86,13 +85,3 @@ def create_app(
     return app
 
 
-_counter = 0
-
-
-def _default_ids() -> Callable[[], str]:
-    def gen() -> str:
-        global _counter
-        _counter += 1
-        return f"id{_counter:04d}"
-
-    return gen

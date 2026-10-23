@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from robot_copilot.plan import MissionPlan
 from robot_copilot.sim.telemetry import FinalState, Frame, PhotoEvent
@@ -18,6 +18,14 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     vehicle: VehicleKind = "drone"
     battery_pct: int = Field(default=100, ge=1, le=100)
+
+    @field_validator("message")
+    @classmethod
+    def _strip_message(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("message must not be empty or whitespace only")
+        return s
 
 
 class RepairRequest(BaseModel):

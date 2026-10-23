@@ -5,7 +5,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from robot_copilot.tools import ToolSpec
+from robot_copilot.tools import SiteSummary, ToolSpec
 from robot_copilot.vehicles import VehicleKind
 
 
@@ -31,7 +31,7 @@ class ProposalRequest(BaseModel):
     history: list[ChatTurn]
     user_message: str
     vehicle: VehicleKind
-    site_summary: object
+    site_summary: SiteSummary
     tools: list[ToolSpec]
     repair: RepairContext | None = None
 

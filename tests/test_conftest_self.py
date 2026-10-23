@@ -4,7 +4,7 @@ import socket
 
 import pytest
 
-from tests.conftest import ROOT, scrub_env, run_validator_subprocess
+from tests.conftest import ROOT, run_validator_subprocess, scrub_env
 
 
 def test_scrub_env_strips_secrets_and_proxy():

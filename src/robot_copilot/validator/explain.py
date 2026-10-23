@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Final
 
 from robot_copilot.plan import DeclineRequest
-from robot_copilot.site import Site
+from robot_copilot.site import Site, normalize_name, resolve_place
 from robot_copilot.validator.issues import (
     IssueCode,
     ResolvedPlan,
@@ -15,7 +15,7 @@ from robot_copilot.validator.issues import (
 def _step(action_index: int | None) -> str:
     if action_index is None:
         return ""
-    return f"Step {action_index + 1} "
+    return f"Step {action_index + 1}: "
 
 
 TEMPLATES: Final[dict[IssueCode, tuple[str, str]]] = {
@@ -122,10 +122,6 @@ def explain_issue(
     if code == IssueCode.UNKNOWN_PLACE:
         sug = p.get("suggestions", "")
         p["suggestions"] = f" Did you mean {sug}?" if sug else ""
-    if code == IssueCode.BATTERY_INSUFFICIENT and "pct" not in p:
-        p.setdefault("pct", "?")
-        p.setdefault("start_wh", "?")
-        p.setdefault("reserve_wh", "?")
     try:
         message = tmpl.format(**p)
     except KeyError:
@@ -156,48 +152,62 @@ def _fmt_wh(w: float) -> str:
 def describe_plan(resolved: ResolvedPlan, site: Site) -> str:
     plan = resolved.plan
     stats = resolved.stats
-    from robot_copilot.site import resolve_place
 
-    takeoff: str | None = None
-    visits: dict[str, tuple[int, int]] = {}
-    photos = stats.photos
-    ends_rth = False
+    takeoff_txt: str | None = None
     for action in plan.actions:
         if action.type == "takeoff":
-            takeoff = f"Take off to {action.altitude_m:.0f} m"
-        elif action.type == "goto" and action.place:
-            p = resolve_place(site, action.place)
-            key = action.place
-            if p and p.kind == "path":
-                visits[key] = (len(p.points), visits.get(key, (0, 0))[1] + 1)
-            else:
-                visits[key] = (1, visits.get(key, (0, 0))[1] + 1)
+            takeoff_txt = f"Take off to {action.altitude_m:.0f} m"
+            break
+
+    visits: list[tuple[str, int, int]] = []
+    current_display: str | None = None
+    current_pts = 1
+    current_photos = 0
+
+    def flush() -> None:
+        nonlocal current_display, current_pts, current_photos
+        if current_display is not None:
+            visits.append((current_display, current_pts, current_photos))
+        current_display = None
+        current_photos = 0
+
+    for action in plan.actions:
+        if action.type == "goto" and action.place:
+            place = resolve_place(site, action.place)
+            display = place.name if place else action.place
+            pts = len(place.points) if place and place.kind == "path" else 1
+            if current_display is None or normalize_name(current_display) != normalize_name(
+                display
+            ):
+                flush()
+                current_display = display
+                current_pts = pts
+        elif action.type == "photo":
+            current_photos += 1
         elif action.type == "return_home":
-            ends_rth = True
+            flush()
+            break
+    flush()
 
     parts: list[str] = []
-    if takeoff:
-        parts.append(takeoff)
-    for name, (pts, _count) in visits.items():
-        p = resolve_place(site, name)
-        seg = f"visit {name} ({pts} points)" if p and p.kind == "path" else f"visit {name}"
+    if takeoff_txt:
+        parts.append(takeoff_txt)
+    for display, pts, photos in visits:
+        seg = f"visit {display}"
+        if pts > 1:
+            seg = f"visit {display} ({pts} points)"
         if photos:
-            seg = f"{seg} taking {photos} photos"
-            photos = 0
+            word = "photo" if photos == 1 else "photos"
+            seg = f"{seg} taking {photos} {word}"
         parts.append(seg)
-    if ends_rth:
-        if parts and "photos" in parts[-1]:
-            parts.append("then return home and land")
-        else:
-            parts.append("return home and land")
+    if any(a.type == "return_home" for a in plan.actions):
+        parts.append("then return home and land")
+
     head = ", ".join(parts)
-    cap = stats.battery_start_wh
-    end = stats.battery_end_wh
-    reserve = stats.reserve_wh
     return (
         f"{head}. {_fmt_dist(stats.distance_m)}, {_fmt_dur(stats.duration_s)}, "
-        f"uses {_fmt_wh(stats.energy_wh)} of {_fmt_wh(cap)}; "
-        f"ends with {_fmt_wh(end)} (reserve {_fmt_wh(reserve)})."
+        f"uses {_fmt_wh(stats.energy_wh)} of {_fmt_wh(stats.battery_start_wh)}; "
+        f"ends with {_fmt_wh(stats.battery_end_wh)} (reserve {_fmt_wh(stats.reserve_wh)})."
     )
 
 
@@ -208,7 +218,7 @@ def describe_report(report: ValidationReport, site: Site, max_issues: int = 20) 
     extra = len(report.issues) - max_issues
     if extra > 0:
         lines.append(f"and {extra} more")
-    return "\n".join(lines)
+    return " ".join(lines)
 
 
 def describe_decline(decline: DeclineRequest) -> str:

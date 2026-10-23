@@ -1,4 +1,4 @@
-import { initMap } from "./map.js";
+import { drawSite, initMap } from "./map.js";
 import { initPlayback } from "./playback.js";
 
 const state = {
@@ -33,6 +33,33 @@ async function api(path, options = {}) {
   return data;
 }
 
+function formatAction(a, index) {
+  const n = index + 1;
+  switch (a.type) {
+    case "takeoff":
+      return `${n}. Take off to ${a.altitude_m} m`;
+    case "goto": {
+      let s = `${n}. Go to `;
+      if (a.place) s += a.place;
+      else if (a.xy) s += `(${a.xy.x_m}, ${a.xy.y_m})`;
+      else s += "target";
+      if (a.altitude_m != null) s += ` at ${a.altitude_m} m`;
+      if (a.speed_mps != null) s += `, ${a.speed_mps} m/s`;
+      return s;
+    }
+    case "hover":
+      return `${n}. Hover ${a.seconds} s`;
+    case "photo":
+      return `${n}. Photo${a.label ? `: ${a.label}` : ""}`;
+    case "land":
+      return `${n}. Land`;
+    case "return_home":
+      return `${n}. Return home`;
+    default:
+      return `${n}. ${a.type}`;
+  }
+}
+
 function renderMission(m) {
   if (!m) {
     el("mission").hidden = true;
@@ -43,11 +70,11 @@ function renderMission(m) {
   const steps = el("plan-steps");
   steps.textContent = "";
   if (m.plan?.actions) {
-    for (const a of m.plan.actions) {
+    m.plan.actions.forEach((a, i) => {
       const li = document.createElement("li");
-      li.textContent = JSON.stringify(a);
+      li.textContent = formatAction(a, i);
       steps.appendChild(li);
-    }
+    });
   }
   const issues = el("issue-list");
   issues.textContent = "";
@@ -56,8 +83,12 @@ function renderMission(m) {
     li.textContent = i.message;
     issues.appendChild(li);
   }
+  const executed = m.status === "executed" || m.status === "aborted";
   el("repair-btn").hidden = !m.can_repair;
-  el("confirm-btn").hidden = !m.can_confirm;
+  el("confirm-btn").hidden = !m.can_confirm || executed;
+  if (executed) {
+    el("confirm-dialog").hidden = true;
+  }
 }
 
 async function sendChat() {
@@ -90,6 +121,9 @@ async function repair() {
   appendMessage(res.assistant_message, "assistant");
   state.mission = res.mission;
   renderMission(res.mission);
+  if (res.mission?.path_preview) {
+    initMap(res.mission.path_preview);
+  }
 }
 
 async function confirmFlow() {
@@ -105,7 +139,12 @@ async function execute() {
     body: JSON.stringify({ plan_hash: state.mission.plan_hash }),
   });
   state.run = run;
-  state.mission = { ...state.mission, status: run.status };
+  state.mission = {
+    ...state.mission,
+    status: "executed",
+    can_confirm: false,
+    can_repair: false,
+  };
   renderMission(state.mission);
   el("confirm-dialog").hidden = true;
   initPlayback(run);
@@ -115,5 +154,9 @@ el("send-btn").addEventListener("click", () => sendChat().catch(console.error));
 el("repair-btn").addEventListener("click", () => repair().catch(console.error));
 el("confirm-btn").addEventListener("click", () => confirmFlow());
 el("execute-btn").addEventListener("click", () => execute().catch(console.error));
+
+api("/api/site")
+  .then((site) => drawSite(site))
+  .catch(() => {});
 
 initMap([]);

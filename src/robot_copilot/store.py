@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -93,6 +94,27 @@ def _connect(engine: Engine) -> None:
         cursor.close()
 
 
+_ID_RE = re.compile(r"^id(\d+)$")
+
+
+def bootstrap_id_factory(engine: Engine) -> Callable[[], str]:
+    max_n = 0
+    with Session(engine) as session:
+        for model in (Conversation, Message, Mission, MissionRevision, Run, AuditEvent):
+            for row in session.exec(select(model)).all():
+                match = _ID_RE.match(str(getattr(row, "id", "")))
+                if match:
+                    max_n = max(max_n, int(match.group(1)))
+    counter = max_n
+
+    def gen() -> str:
+        nonlocal counter
+        counter += 1
+        return f"id{counter:04d}"
+
+    return gen
+
+
 class Store:
     def __init__(
         self,
@@ -107,11 +129,15 @@ class Store:
 
     @classmethod
     def from_url(
-        cls, url: str, clock: Callable[[], datetime], id_factory: Callable[[], str]
+        cls,
+        url: str,
+        clock: Callable[[], datetime],
+        id_factory: Callable[[], str] | None = None,
     ) -> Store:
         engine = create_engine(url, connect_args={"check_same_thread": False})
         SQLModel.metadata.create_all(engine)
-        return cls(engine, clock, id_factory)
+        ids = id_factory or bootstrap_id_factory(engine)
+        return cls(engine, clock, ids)
 
     def create_conversation(self) -> Conversation:
         with Session(self._engine) as session:
@@ -197,6 +223,33 @@ class Store:
             m.revision = rev + 1
             m.repair_attempts = attempts + 1
             session.add(m)
+            session.commit()
+            return True
+
+    def commit_repair_failure(
+        self,
+        mission_id: str,
+        rev: int,
+        attempts: int,
+        generation: int,
+        status: str,
+        detail: dict[str, Any],
+    ) -> bool:
+        with Session(self._engine) as session:
+            m = session.get(Mission, mission_id)
+            conv = session.get(Conversation, m.conversation_id if m else "")
+            if (
+                m is None
+                or conv is None
+                or conv.generation != generation
+                or m.status != "repairing"
+                or m.revision != rev
+                or m.repair_attempts != attempts
+            ):
+                return False
+            m.status = status
+            session.add(m)
+            self._audit(session, mission_id, "provider_error", detail)
             session.commit()
             return True
 

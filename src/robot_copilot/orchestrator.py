@@ -82,8 +82,6 @@ class Orchestrator:
         return self._locks[conv_id]
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
-        if not req.message.strip():
-            raise ValueError("empty message")
         conv_id = req.conversation_id
         if not conv_id:
             conv = self._store.create_conversation()
@@ -341,7 +339,7 @@ class Orchestrator:
             result = await self._call_provider(chat_req, repair_ctx)
         except ProviderError as exc:
             async with self._lock(m.conversation_id):
-                self._finish_repair_error(m, exc)
+                self._finish_repair_error(mission_id, exc)
             return ChatResponse(
                 conversation_id=m.conversation_id,
                 kind="error",
@@ -352,12 +350,26 @@ class Orchestrator:
         async with self._lock(m.conversation_id):
             return self._commit_repair(m, result)
 
-    def _finish_repair_error(self, m: Mission, exc: ProviderError) -> None:
+    def _finish_repair_error(self, mission_id: str, exc: ProviderError) -> None:
+        from sqlmodel import Session
+
+        from robot_copilot.store import Conversation
+
+        m = self._store.get_mission(mission_id)
+        if m is None:
+            return
         status = "repair_exhausted" if m.repair_attempts >= m.max_repairs else "invalid"
-        m2 = self._store.get_mission(m.id)
-        if m2:
-            m2.status = status
-        self._store.audit(m.id, "provider_error", {"kind": exc.kind})
+        with Session(self._store._engine) as session:
+            conv = session.get(Conversation, m.conversation_id)
+            generation = conv.generation if conv else 0
+        self._store.commit_repair_failure(
+            mission_id,
+            m.revision,
+            m.repair_attempts,
+            generation,
+            status,
+            {"kind": exc.kind},
+        )
 
     def _commit_repair(self, m: Mission, result: ProviderResult) -> ChatResponse:
         ctx = self._ctx(m.vehicle, m.battery_pct)  # type: ignore[arg-type]

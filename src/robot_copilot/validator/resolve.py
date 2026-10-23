@@ -224,7 +224,11 @@ def check_spatial_and_energy(
                 code=IssueCode.BATTERY_INSUFFICIENT,
                 severity="error",
                 action_index=None,
-                params=(("start_wh", battery_start), ("reserve_wh", reserve)),
+                params=(
+                    ("pct", ctx.battery_pct),
+                    ("start_wh", battery_start),
+                    ("reserve_wh", reserve),
+                ),
                 message=msg,
                 hint=hint,
             )
@@ -328,13 +332,22 @@ def check_spatial_and_energy(
             )
         )
     if stats.battery_end_wh < reserve:
-        msg, hint = explain_issue(IssueCode.BATTERY_INSUFFICIENT, None, {})
+        batt_params = {
+            "pct": ctx.battery_pct,
+            "start_wh": round(battery_start, 1),
+            "reserve_wh": round(reserve, 1),
+        }
+        msg, hint = explain_issue(IssueCode.BATTERY_INSUFFICIENT, None, batt_params)
         issues.append(
             ValidationIssue(
                 code=IssueCode.BATTERY_INSUFFICIENT,
                 severity="error",
                 action_index=None,
-                params=(),
+                params=(
+                    ("pct", ctx.battery_pct),
+                    ("start_wh", battery_start),
+                    ("reserve_wh", reserve),
+                ),
                 message=msg,
                 hint=hint,
             )

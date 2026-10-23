@@ -20,7 +20,7 @@ def test_every_issue_code_has_template():
 
 def test_step_wording():
     msg, _ = explain_issue(IssueCode.ALTITUDE_HIGH, 0, {"altitude_m": 150, "max": 120})
-    assert "Step 1" in msg
+    assert "Step 1:" in msg
 
 
 def test_describe_plan_north_fence():

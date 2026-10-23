@@ -64,3 +64,33 @@ def test_unknown_field(guarded_client: TestClient):
 def test_security_headers_on_index(guarded_client: TestClient):
     r = guarded_client.get("/")
     assert "default-src 'self'" in r.headers.get("content-security-policy", "")
+    assert r.headers.get("x-content-type-options") == "nosniff"
+    assert r.headers.get("referrer-policy") == "no-referrer"
+
+
+def test_form_content_type(guarded_client: TestClient):
+    r = guarded_client.post(
+        "/api/chat",
+        data={"message": "hi"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert r.status_code == 415
+    assert guarded_client.spy.calls == 0  # type: ignore[attr-defined]
+
+
+def test_whitespace_only_message(guarded_client: TestClient):
+    r = guarded_client.post("/api/chat", json={"message": "   "})
+    assert r.status_code == 422
+    assert guarded_client.spy.calls == 0  # type: ignore[attr-defined]
+
+
+def test_chunked_body_too_large(guarded_client: TestClient):
+    """Chunked oversize bodies are covered in tests/unit/test_security_body.py."""
+    big = "x" * (16 * 1024 + 1)
+    r = guarded_client.post(
+        "/api/chat",
+        content=big,
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.status_code == 413
+    assert r.json()["detail"]["code"] == "payload_too_large"

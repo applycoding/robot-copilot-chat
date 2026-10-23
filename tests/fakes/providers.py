@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 
 from robot_copilot.llm.base import LLMProvider, ProposalRequest, ProviderError, ProviderResult
 from robot_copilot.llm.mock import MockProvider
@@ -30,14 +31,41 @@ class GatedOnRepairProvider:
 
     def __init__(self, inner: LLMProvider) -> None:
         self._inner = inner
-        self.enter = asyncio.Event()
-        self.release = asyncio.Event()
+        self.enter = threading.Event()
+        self.release = threading.Event()
         self.release.set()
 
     async def propose(self, request: ProposalRequest) -> ProviderResult:
         if request.repair is not None:
             self.enter.set()
-            await self.release.wait()
+            await asyncio.to_thread(self.release.wait)
+        return await self._inner.propose(request)
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+
+class PairedGatedProvider:
+    """First propose call runs immediately; the next two wait on a barrier."""
+
+    name = "mock"
+    model = "mock-1"
+
+    def __init__(self, inner: LLMProvider) -> None:
+        self._inner = inner
+        self.enter = threading.Event()
+        self._calls = 0
+        self._barrier: threading.Barrier | None = None
+        self._release = threading.Event()
+        self._release.set()
+
+    async def propose(self, request: ProposalRequest) -> ProviderResult:
+        self._calls += 1
+        if self._calls == 1 or self._barrier is None:
+            return await self._inner.propose(request)
+        self.enter.set()
+        await asyncio.to_thread(self._barrier.wait, 5)
+        await asyncio.to_thread(self._release.wait)
         return await self._inner.propose(request)
 
     async def aclose(self) -> None:
@@ -50,13 +78,13 @@ class GatedProvider:
 
     def __init__(self, inner: LLMProvider) -> None:
         self._inner = inner
-        self.enter = asyncio.Event()
-        self.release = asyncio.Event()
+        self.enter = threading.Event()
+        self.release = threading.Event()
         self.release.set()
 
     async def propose(self, request: ProposalRequest) -> ProviderResult:
         self.enter.set()
-        await self.release.wait()
+        await asyncio.to_thread(self.release.wait)
         return await self._inner.propose(request)
 
     async def aclose(self) -> None:

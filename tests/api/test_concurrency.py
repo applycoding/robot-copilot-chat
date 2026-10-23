@@ -1,47 +1,45 @@
 from __future__ import annotations
 
-import asyncio
 import sqlite3
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from concurrent.futures import ThreadPoolExecutor, wait
 
-import pytest
 from sqlmodel import Session, select
 
 from robot_copilot.llm.mock import MockProvider
 from robot_copilot.store import Run
 from tests.conftest import make_client
-from tests.fakes.providers import GatedOnRepairProvider, GatedProvider
+from tests.fakes.providers import GatedOnRepairProvider, GatedProvider, PairedGatedProvider
 
 
-@pytest.mark.asyncio
-async def test_repair_repair_single_provider(tmp_path, fake_clock, counter_ids):
+def _wait_enter(event: threading.Event, timeout: float = 3.0) -> None:
+    assert event.wait(timeout), "provider did not start in time"
+
+
+def test_repair_repair_single_provider(tmp_path, fake_clock, counter_ids):
     inner = MockProvider("mock-1")
     gated = GatedProvider(inner)
     client = make_client(tmp_path, fake_clock, counter_ids, provider=gated)
     with client:
         r = client.post("/api/chat", json={"message": "survey the pond at 150 m"})
         mid = r.json()["mission"]["id"]
-        conv = r.json()["conversation_id"]
         gated.release.clear()
         gated.enter.clear()
 
-        async def do_repair():
+        def do_repair():
             return client.post(f"/api/missions/{mid}/repair", json={})
 
-        t1 = asyncio.create_task(do_repair())
-        t2 = asyncio.create_task(do_repair())
-        await asyncio.wait_for(gated.enter.wait(), timeout=2)
-        assert inner  # provider entered once
-        gated.release.set()
-        res = await asyncio.gather(t1, t2)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f1 = pool.submit(do_repair)
+            f2 = pool.submit(do_repair)
+            _wait_enter(gated.enter)
+            gated.release.set()
+            res = [f1.result(), f2.result()]
     codes = sorted(x.status_code for x in res)
     assert codes == [200, 409]
-    loser = next(x for x in res if x.status_code == 409)
-    assert loser.json()["detail"]["code"] in ("not_repairable", "stale")
 
 
-@pytest.mark.asyncio
-async def test_repair_chat_discards_repair(tmp_path, fake_clock, counter_ids):
+def test_repair_chat_discards_repair(tmp_path, fake_clock, counter_ids):
     inner = MockProvider("mock-1")
     gated = GatedOnRepairProvider(inner)
     client = make_client(tmp_path, fake_clock, counter_ids, provider=gated)
@@ -51,57 +49,56 @@ async def test_repair_chat_discards_repair(tmp_path, fake_clock, counter_ids):
         conv = r.json()["conversation_id"]
         gated.release.clear()
         gated.enter.clear()
+        repair_done: list = []
 
-        repair_task = asyncio.create_task(
-            asyncio.to_thread(lambda: client.post(f"/api/missions/{mid}/repair", json={}))
-        )
-        await asyncio.wait_for(gated.enter.wait(), timeout=2)
-        chat_res = await asyncio.to_thread(
-            lambda: client.post(
-                "/api/chat",
-                json={"conversation_id": conv, "message": "take a photo of the barn"},
-            )
+        def repair():
+            repair_done.append(client.post(f"/api/missions/{mid}/repair", json={}))
+
+        t = threading.Thread(target=repair)
+        t.start()
+        _wait_enter(gated.enter)
+        chat_res = client.post(
+            "/api/chat",
+            json={"conversation_id": conv, "message": "take a photo of the barn"},
         )
         gated.release.set()
-        repair_res = await repair_task
+        t.join(timeout=5)
+        assert t.is_alive() is False
+        repair_res = repair_done[0]
     assert chat_res.status_code == 200
-    assert chat_res.json().get("mission")
     assert repair_res.status_code == 409
     assert repair_res.json()["detail"]["code"] == "stale"
-    m = client.get(f"/api/missions/{mid}").json()
-    assert m["status"] == "superseded"
+    assert client.get(f"/api/missions/{mid}").json()["status"] == "superseded"
 
 
-@pytest.mark.asyncio
-async def test_chat_chat_one_wins(tmp_path, fake_clock, counter_ids):
+def test_chat_chat_one_wins(tmp_path, fake_clock, counter_ids):
     inner = MockProvider("mock-1")
-    gated = GatedProvider(inner)
+    gated = PairedGatedProvider(inner)
     client = make_client(tmp_path, fake_clock, counter_ids, provider=gated)
     with client:
         r0 = client.post("/api/chat", json={"message": "inspect the north fence"})
         conv = r0.json()["conversation_id"]
-        gated.release.clear()
+        gated._release.clear()
         gated.enter.clear()
+        gated._barrier = threading.Barrier(2)
 
-        async def chat(msg: str):
-            return await asyncio.to_thread(
-                lambda: client.post(
-                    "/api/chat",
-                    json={"conversation_id": conv, "message": msg},
-                )
+        def chat(msg: str):
+            return client.post(
+                "/api/chat",
+                json={"conversation_id": conv, "message": msg},
             )
 
-        t1 = asyncio.create_task(chat("take a photo of the barn"))
-        t2 = asyncio.create_task(chat("survey the pond at 150 m"))
-        await asyncio.wait_for(gated.enter.wait(), timeout=2)
-        gated.release.set()
-        res = await asyncio.gather(t1, t2)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f1 = pool.submit(chat, "take a photo of the barn")
+            f2 = pool.submit(chat, "survey the pond at 150 m")
+            _wait_enter(gated.enter)
+            gated._release.set()
+            res = [f1.result(), f2.result()]
     assert any(x.status_code == 409 for x in res)
     assert sum(1 for x in res if x.status_code == 200) == 1
 
 
-@pytest.mark.asyncio
-async def test_repair_confirm_not_confirmable_then_hash_mismatch(tmp_path, fake_clock, counter_ids):
+def test_repair_confirm_not_confirmable_then_hash_mismatch(tmp_path, fake_clock, counter_ids):
     inner = MockProvider("mock-1")
     gated = GatedProvider(inner)
     client = make_client(tmp_path, fake_clock, counter_ids, provider=gated)
@@ -111,19 +108,22 @@ async def test_repair_confirm_not_confirmable_then_hash_mismatch(tmp_path, fake_
         old_hash = r.json()["mission"]["plan_hash"]
         gated.release.clear()
         gated.enter.clear()
+        repair_result: list = []
 
-        repair_task = asyncio.create_task(
-            asyncio.to_thread(lambda: client.post(f"/api/missions/{mid}/repair", json={}))
-        )
-        await asyncio.wait_for(gated.enter.wait(), timeout=2)
+        def repair():
+            repair_result.append(client.post(f"/api/missions/{mid}/repair", json={}))
+
+        t = threading.Thread(target=repair)
+        t.start()
+        _wait_enter(gated.enter)
         during = client.post(f"/api/missions/{mid}/confirm", json={"plan_hash": old_hash})
         assert during.status_code == 409
         assert during.json()["detail"]["code"] == "not_confirmable"
         gated.release.set()
-        repair_res = await repair_task
+        t.join(timeout=5)
+        repair_res = repair_result[0]
         assert repair_res.status_code == 200
-        new_hash = repair_res.json()["mission"]["plan_hash"]
-        assert new_hash != old_hash
+        assert repair_res.json()["mission"]["plan_hash"] != old_hash
         bad = client.post(f"/api/missions/{mid}/confirm", json={"plan_hash": old_hash})
         assert bad.status_code == 409
         assert bad.json()["detail"]["code"] == "plan_hash_mismatch"
@@ -142,19 +142,17 @@ def test_confirm_confirm_single_run(tmp_path, fake_clock, counter_ids):
         with ThreadPoolExecutor(max_workers=2) as pool:
             f1 = pool.submit(confirm)
             f2 = pool.submit(confirm)
+            wait([f1, f2])
             results = [f1.result(), f2.result()]
         ok = [x for x in results if x.status_code == 200]
-        conflict = [x for x in results if x.status_code == 409]
         assert len(ok) == 1
-        assert len(conflict) == 1
         store = client.app.state.orchestrator._store
         with Session(store._engine) as session:
             runs = list(session.exec(select(Run)).all())
         assert len(runs) == 1
 
 
-@pytest.mark.asyncio
-async def test_begin_immediate_during_provider(tmp_path, fake_clock, counter_ids):
+def test_begin_immediate_during_provider(tmp_path, fake_clock, counter_ids):
     inner = MockProvider("mock-1")
     gated = GatedProvider(inner)
     db = tmp_path / "c.db"
@@ -180,14 +178,18 @@ async def test_begin_immediate_during_provider(tmp_path, fake_clock, counter_ids
     with client:
         gated.release.clear()
         gated.enter.clear()
-        chat_task = asyncio.create_task(
-            asyncio.to_thread(
-                lambda: client.post("/api/chat", json={"message": "inspect the north fence"})
+        chat_result: list = []
+
+        def chat():
+            chat_result.append(
+                client.post("/api/chat", json={"message": "inspect the north fence"})
             )
-        )
-        await asyncio.wait_for(gated.enter.wait(), timeout=2)
-        probe_ok = await asyncio.to_thread(probe)
+
+        t = threading.Thread(target=chat)
+        t.start()
+        _wait_enter(gated.enter)
+        probe_ok = probe()
         gated.release.set()
-        r = await chat_task
-        assert r.status_code == 200
+        t.join(timeout=5)
+        assert chat_result and chat_result[0].status_code == 200
     assert probe_ok

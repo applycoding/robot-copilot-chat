@@ -63,7 +63,10 @@ class RequestGuardMiddleware:
                 message = {**message, "headers": hdrs}
             await send(message)
 
-        await self.app(scope, receive, send_wrapper)
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except BodyTooLarge:
+            await _json_error(send, 413, "payload_too_large", "Body too large.")
 
 
 def _origin_ok(origin: str, allowed: tuple[str, ...]) -> bool:
