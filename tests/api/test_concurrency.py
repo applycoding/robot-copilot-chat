@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
-import threading
 
 import pytest
 
@@ -34,7 +33,8 @@ async def test_repair_repair_single_provider(tmp_path, fake_clock, counter_ids):
     assert 409 in codes
 
 
-def test_begin_immediate_during_provider(tmp_path, fake_clock, counter_ids):
+@pytest.mark.asyncio
+async def test_begin_immediate_during_provider(tmp_path, fake_clock, counter_ids):
     inner = MockProvider("mock-1")
     gated = GatedProvider(inner)
     db = tmp_path / "c.db"
@@ -45,23 +45,28 @@ def test_begin_immediate_during_provider(tmp_path, fake_clock, counter_ids):
         provider=gated,
         extra_env={"RCC_DB_URL": f"sqlite:///{db}"},
     )
-    probe_ok: list[bool] = []
 
-    def probe():
+    def probe() -> bool:
         conn = sqlite3.connect(str(db))
         try:
             conn.execute("BEGIN IMMEDIATE")
             conn.rollback()
-            probe_ok.append(True)
+            return True
         except sqlite3.OperationalError:
-            probe_ok.append(False)
+            return False
         finally:
             conn.close()
 
     with client:
         gated.release.clear()
-        r = client.post("/api/chat", json={"message": "inspect the north fence"})
-        assert r.status_code == 200
-        threading.Thread(target=probe).start()
+        chat_task = asyncio.create_task(
+            asyncio.to_thread(
+                lambda: client.post("/api/chat", json={"message": "inspect the north fence"})
+            )
+        )
+        await asyncio.wait_for(gated.enter.wait(), timeout=2)
+        probe_ok = await asyncio.to_thread(probe)
         gated.release.set()
-    assert probe_ok and probe_ok[0]
+        r = await chat_task
+        assert r.status_code == 200
+    assert probe_ok

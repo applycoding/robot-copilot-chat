@@ -37,7 +37,7 @@ jobs:
         env:
           GITLEAKS_CONFIG: .gitleaks.toml
           GITLEAKS_ENABLE_COMMENTS: "false"
-          GITHUB_TOKEN: ${{ github.token }}
+          GITLEAKS_ENABLE_SUMMARY: "false"
 
   typecheck:
     runs-on: ubuntu-24.04
