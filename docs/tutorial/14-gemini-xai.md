@@ -1,44 +1,44 @@
-# Gemini and xAI adapters
+# 14 Gemini and xAI adapters
 
-## Goal
+Gemini uses the Google GenAI client with injectable HTTP options in tests. xAI follows the OpenAI-compatible chat completions surface with a distinct model id from settings. Both adapters map tool calls into the same normalized `ProviderResult` structure as Anthropic and OpenAI.
 
-Work through **gemini and xai adapters** with the real robot-copilot-chat sources open beside this page.
+Registry selection keeps construction in one place so `create_app` only calls `build_provider(settings)`.
 
-## Concepts
-
-- Typed plans, validator authority, and human confirmation before simulation.
-- Chapter focus: gemini.
+Lazy imports inside `build_provider` keep optional SDK dependencies from loading when running mock-only deployments. xAI uses the same tool schema as OpenAI-compatible clients. Settings validation rejects unknown provider enums at startup rather than failing on first chat.
 
 ## Files
 
-- `src/robot_copilot/main.py`
-- `PLAN.md` (normative behavior)
+- `src/robot_copilot/llm/gemini_provider.py`
+- `src/robot_copilot/llm/xai_provider.py`
+- `src/robot_copilot/llm/registry.py`
+- `tests/providers/test_gemini.py`
+- `tests/providers/test_xai.py`
 
-## Run it
+```python
+def build_provider(settings: AppSettings) -> LLMProvider:
+    if settings.provider == ProviderName.MOCK:
+        return MockProvider(settings.model)
+    if settings.provider == ProviderName.ANTHROPIC:
+        from robot_copilot.llm.anthropic_provider import AnthropicProvider
 
-```bash
-uv sync --locked
-uv run --no-sync uvicorn --factory robot_copilot.main:create_app --host 127.0.0.1 --port 8000
+        return AnthropicProvider(
+            settings.model,
+            settings.api_key,  # type: ignore[arg-type]
+            timeout_s=settings.request_timeout_s,
+            max_retries=settings.sdk_max_retries,
+            max_output_tokens=settings.max_output_tokens,
+        )
 ```
 
+Gemini contract tests inspect a real serialized request object from the fake client; xAI tests assert the configured model id on the wire.
 
-Gemini uses the Google GenAI client with HttpOptions pinned in tests so requests are inspectable. xAI follows the OpenAI-compatible surface with a distinct model id. Both adapters normalize tool results through `llm/normalize.py` so downstream validation always sees the same shapes.
 
+
+This chapter ties to the integration story in `tests/scenario/farm_day.json`: replay those steps after reading so you see how gemini-xai behaves inside a long conversation with repairs, declines, and confirmations. Cross-check any prose claims against `PLAN.md` criterion numbers when you are preparing a portfolio review.
 ## Exercise
 
-Compare tool definitions in `robot_copilot/tools.py` with what each provider test expects to be sent.
+Switch `RCC_PROVIDER` to mock in your shell and confirm `healthz` still reports the mock model without loading Gemini or xAI SDK clients.
 
 ## Checkpoint
 
-```bash
-uv run --no-sync pytest tests/providers/test_gemini.py tests/providers/test_xai.py -q
-```
-## Exercises
-
-Apply the checkpoint below, then read on.
-
-## What to notice in the codebase
-
-Keep a scratch log while you work: file paths, function names, and the pytest node ids you ran. When something surprises you (for example a 409 conflict or a clipped map polyline), capture the HTTP status, mission status, and audit kinds from SQLite. The tutorial checkpoints are intentionally narrow so you can run them quickly, but the real learning comes from comparing your local traces with the farm-day golden audit sequence and the validator issue templates in `explain.py`. If you change behavior, update both tests and the matching tutorial chapter so the next reader inherits an accurate story.
-
-Re-run `scripts/build_tutorials.py` after editing cited excerpts so line numbers stay honest, or update the script literals when you move code. Pair each chapter with one manual UI action (send a chat, repair once, confirm) so you see the same statuses the API tests assert.
+- `tests/providers/test_gemini.py`

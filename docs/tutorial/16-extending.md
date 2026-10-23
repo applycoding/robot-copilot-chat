@@ -1,46 +1,43 @@
-# Extending the stack
+# 16 Extending the stack
 
-## Goal
+To add a vehicle profile, extend `config/vehicles.toml` and teach structure and energy modules about any new limits. To add a provider, implement `LLMProvider`, register it in `llm/registry.py`, and add contract tests that mirror existing vendors. UI changes should keep map fitting and playback reset logic aligned so operators still see faithful geography after edits.
 
-Work through **extending the stack** with the real robot-copilot-chat sources open beside this page.
+Prefer new `Store` methods over reaching into private SQLAlchemy engines from orchestrator code.
 
-## Concepts
-
-- Typed plans, validator authority, and human confirmation before simulation.
-- Chapter focus: extending the stack.
+New audit kinds should be documented in PLAN.md and reflected in scenario golden files when behavior changes. Feature flags belong in settings, not ad hoc environment reads scattered through handlers. Keep orchestrator methods small enough to test with `TestClient` and fake providers without booting a browser.
 
 ## Files
 
-- `src/robot_copilot/main.py`
-- `PLAN.md` (normative behavior)
+- `src/robot_copilot/llm/registry.py`
+- `src/robot_copilot/llm/base.py`
+- `src/robot_copilot/store.py`
+- `PLAN.md`
 
-## Run it
+```python
+def build_provider(settings: AppSettings) -> LLMProvider:
+    if settings.provider == ProviderName.MOCK:
+        return MockProvider(settings.model)
+    if settings.provider == ProviderName.ANTHROPIC:
+        from robot_copilot.llm.anthropic_provider import AnthropicProvider
 
-```bash
-uv sync --locked
-uv run --no-sync uvicorn --factory robot_copilot.main:create_app --host 127.0.0.1 --port 8000
+        return AnthropicProvider(
+            settings.model,
+            settings.api_key,  # type: ignore[arg-type]
+            timeout_s=settings.request_timeout_s,
+            max_retries=settings.sdk_max_retries,
+            max_output_tokens=settings.max_output_tokens,
+        )
 ```
 
+When you change persistence or audit semantics, update farm-day golden expectations and the matching tutorial chapter checkpoints.
 
-To add a vehicle, extend `config/vehicles.toml` and teach structure/energy modules about any new limits. To add a provider, implement `LLMProvider`, register it in `llm/registry.py`, and add contract tests mirroring existing vendors. To add UI affordances, keep plan rendering and map fitting in sync so previews remain geographically faithful.
 
-When changing persistence, extend `Store` methods instead of reaching into private SQLAlchemy engines from orchestrator code.
 
+This chapter ties to the integration story in `tests/scenario/farm_day.json`: replay those steps after reading so you see how extending behaves inside a long conversation with repairs, declines, and confirmations. Cross-check any prose claims against `PLAN.md` criterion numbers when you are preparing a portfolio review.
 ## Exercise
 
-Sketch a new mock phrase that declines with category `policy` and add a unit test that expects `kind=decline`.
+Sketch a decline category for a new unsupported verb and add a mock matcher plus a unit test expecting `kind=decline`.
 
 ## Checkpoint
 
-```bash
-uv run --no-sync pytest tests/unit/test_mock_provider.py -q
-```
-## Exercises
-
-Apply the checkpoint below, then read on.
-
-## What to notice in the codebase
-
-Keep a scratch log while you work: file paths, function names, and the pytest node ids you ran. When something surprises you (for example a 409 conflict or a clipped map polyline), capture the HTTP status, mission status, and audit kinds from SQLite. The tutorial checkpoints are intentionally narrow so you can run them quickly, but the real learning comes from comparing your local traces with the farm-day golden audit sequence and the validator issue templates in `explain.py`. If you change behavior, update both tests and the matching tutorial chapter so the next reader inherits an accurate story.
-
-Re-run `scripts/build_tutorials.py` after editing cited excerpts so line numbers stay honest, or update the script literals when you move code. Pair each chapter with one manual UI action (send a chat, repair once, confirm) so you see the same statuses the API tests assert.
+- `tests/unit/test_mock_provider.py`

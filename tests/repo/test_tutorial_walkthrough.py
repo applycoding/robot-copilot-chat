@@ -1,8 +1,12 @@
+from __future__ import annotations
+
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TUTORIAL = ROOT / "docs/tutorial"
-SECTIONS = ["## Goal", "## Concepts", "## Files", "## Run it", "## Checkpoint", "## Exercises"]
+SECTIONS = ["## Files", "## Exercise", "## Checkpoint"]
+_PY_FENCE = re.compile(r"```python\n(.*?)```", re.DOTALL)
 
 
 def test_tutorial_files():
@@ -11,7 +15,9 @@ def test_tutorial_files():
         assert matches, i
         text = matches[0].read_text()
         for sec in SECTIONS:
-            assert sec in text
+            assert sec in text, f"{matches[0].name} missing {sec}"
+        words = len(re.findall(r"\w+", text))
+        assert 235 <= words <= 950, f"{matches[0].name} word count {words}"
 
 
 def test_tutorial_referenced_paths_exist():
@@ -30,6 +36,40 @@ def test_tutorial_referenced_paths_exist():
                 rel = line.split("`", 2)[1]
                 if rel.startswith(("src/", "config/", "tests/", "docs/", ".github/")):
                     assert (ROOT / rel).exists(), f"{path.name}: missing {rel}"
+
+
+def test_tutorial_python_excerpts_are_verbatim():
+    for path in TUTORIAL.glob("*.md"):
+        text = path.read_text()
+        files = _files_list(text)
+        assert files, f"{path.name}: no files listed"
+        blocks = _PY_FENCE.findall(text)
+        assert blocks, f"{path.name}: no python excerpt"
+        for block in blocks:
+            excerpt = block.strip("\n") + "\n"
+            matched = False
+            for rel in files:
+                if not rel.endswith(".py"):
+                    continue
+                src = (ROOT / rel).read_text()
+                if excerpt in src:
+                    matched = True
+                    break
+            assert matched, f"{path.name}: excerpt not found verbatim in listed .py files"
+
+
+def _files_list(text: str) -> list[str]:
+    out: list[str] = []
+    in_files = False
+    for line in text.splitlines():
+        if line.strip() == "## Files":
+            in_files = True
+            continue
+        if in_files and line.startswith("## "):
+            break
+        if in_files and line.startswith("- `") and "`" in line[3:]:
+            out.append(line.split("`", 2)[1])
+    return out
 
 
 def test_checkpoint_collects():

@@ -62,6 +62,22 @@ function stopTimer() {
   }
 }
 
+export function resetPlayback() {
+  stopTimer();
+  frames = [];
+  finalState = null;
+  index = 0;
+  setStatus("idle");
+  setExecPath("");
+  const marker = document.getElementById("vehicle-marker");
+  if (marker) marker.replaceChildren();
+  const tel = document.getElementById("telemetry");
+  if (tel) {
+    tel.textContent = "";
+    tel.dataset.frameIndex = "0";
+  }
+}
+
 export function initPlayback(run) {
   stopTimer();
   frames = run.frames || [];

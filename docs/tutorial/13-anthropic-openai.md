@@ -1,46 +1,56 @@
-# Anthropic and OpenAI adapters
+# 13 Anthropic and OpenAI adapters
 
-## Goal
+Cloud providers implement the shared `LLMProvider` protocol. `AnthropicProvider` and `OpenAIProvider` serialize tool definitions from `tools.py`, honor timeout and retry settings from `config/app.toml`, and normalize responses through `llm/normalize.py` so downstream validation always sees the same shapes.
 
-Work through **anthropic and openai adapters** with the real robot-copilot-chat sources open beside this page.
+Tests inject SDK clients backed by `httpx2.MockTransport` to assert outbound URLs, models, tool schemas, and parsing of text, decline, malformed, and HTTP error responses without live network I/O.
 
-## Concepts
-
-- Typed plans, validator authority, and human confirmation before simulation.
-- Chapter focus: anthropic.
+OpenAI tests assert `max_output_tokens` and handle malformed, incomplete, and refusal responses distinctly. Both providers map tool arguments through the same normalizer so validator code never branches on vendor JSON quirks. API keys never appear in exception messages thanks to shared redaction helpers.
 
 ## Files
 
-- `src/robot_copilot/main.py`
-- `PLAN.md` (normative behavior)
+- `src/robot_copilot/llm/anthropic_provider.py`
+- `src/robot_copilot/llm/openai_provider.py`
+- `tests/providers/test_anthropic.py`
+- `tests/providers/test_openai.py`
 
-## Run it
+```python
+class AnthropicProvider:
+    name = "anthropic"
 
-```bash
-uv sync --locked
-uv run --no-sync uvicorn --factory robot_copilot.main:create_app --host 127.0.0.1 --port 8000
+    def __init__(
+        self,
+        model: str,
+        api_key: SecretStr,
+        *,
+        timeout_s: float,
+        max_retries: int,
+        max_output_tokens: int,
+        client: Any | None = None,
+    ) -> None:
+        self.model = model
+        self._max_output_tokens = max_output_tokens
+        self._max_args = 32768
+        if client is not None:
+            self._client = client
+        else:
+            import anthropic
+
+            self._client = anthropic.AsyncAnthropic(
+                api_key=api_key.get_secret_value(),
+                timeout=timeout_s,
+                max_retries=max_retries,
+            )
 ```
 
+Provider tests also cover 401, 429, 500, and timeout paths with `max_retries=2` where configured.
 
-Provider modules translate `ProposalRequest` into vendor SDK calls with tool definitions matching `propose_plan` / `decline`. Tests inject `httpx2.MockTransport` clients to assert serialized URLs, headers, models, tool schemas, and parsing of text, decline, malformed, and error responses without network access.
 
-Retries are configured for transient HTTP failures; auth errors fail fast.
 
+This chapter ties to the integration story in `tests/scenario/farm_day.json`: replay those steps after reading so you see how anthropic-openai behaves inside a long conversation with repairs, declines, and confirmations. Cross-check any prose claims against `PLAN.md` criterion numbers when you are preparing a portfolio review.
 ## Exercise
 
-Read `tests/providers/test_anthropic.py` and note which fields are asserted on the outbound request body.
+Open `tests/providers/test_anthropic.py` and list every HTTP header or body field the mock transport asserts on the outbound request.
 
 ## Checkpoint
 
-```bash
-uv run --no-sync pytest tests/providers/test_anthropic.py tests/providers/test_openai.py -q
-```
-## Exercises
-
-Apply the checkpoint below, then read on.
-
-## What to notice in the codebase
-
-Keep a scratch log while you work: file paths, function names, and the pytest node ids you ran. When something surprises you (for example a 409 conflict or a clipped map polyline), capture the HTTP status, mission status, and audit kinds from SQLite. The tutorial checkpoints are intentionally narrow so you can run them quickly, but the real learning comes from comparing your local traces with the farm-day golden audit sequence and the validator issue templates in `explain.py`. If you change behavior, update both tests and the matching tutorial chapter so the next reader inherits an accurate story.
-
-Re-run `scripts/build_tutorials.py` after editing cited excerpts so line numbers stay honest, or update the script literals when you move code. Pair each chapter with one manual UI action (send a chat, repair once, confirm) so you see the same statuses the API tests assert.
+- `tests/providers/test_anthropic.py`

@@ -1,5 +1,5 @@
 import { drawSite, initMap } from "./map.js";
-import { initPlayback } from "./playback.js";
+import { initPlayback, resetPlayback } from "./playback.js";
 
 const state = {
   conversationId: null,
@@ -15,7 +15,9 @@ function appendMessage(text, role) {
   const div = document.createElement("div");
   div.textContent = text;
   div.dataset.role = role;
-  el("messages").appendChild(div);
+  const box = el("messages");
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
 }
 
 async function api(path, options = {}) {
@@ -104,6 +106,8 @@ async function sendChat() {
   appendMessage(message, "user");
   appendMessage(res.assistant_message, "assistant");
   state.mission = res.mission;
+  state.run = null;
+  resetPlayback();
   renderMission(res.mission);
   if (res.mission?.path_preview) {
     initMap(res.mission.path_preview);
@@ -119,6 +123,8 @@ async function repair() {
   });
   appendMessage(res.assistant_message, "assistant");
   state.mission = res.mission;
+  state.run = null;
+  resetPlayback();
   renderMission(res.mission);
   if (res.mission?.path_preview) {
     initMap(res.mission.path_preview);

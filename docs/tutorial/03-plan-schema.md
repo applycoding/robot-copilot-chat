@@ -1,66 +1,36 @@
-# Mission plan schema
+# 03 Mission plan schema
 
-## Goal
+Executable input is always a `MissionPlan`: a vehicle, a short summary string (display only), and an ordered action list. Pydantic models use `extra=forbid` and strict typing so provider JSON cannot smuggle unknown keys.
 
-Work through **mission plan schema** with the real robot-copilot-chat sources open beside this page.
+Each `goto` must target exactly one of `place` or `xy`:
 
-## Concepts
-
-- Typed plans, validator authority, and human confirmation before simulation.
-- Chapter focus: mission plan schema.
+`MissionPlan.summary` is capped in length and never participates in confirmation hashing. Hashing uses canonical JSON over the plan, vehicle profile, site fingerprint, and validator version so tampering or vehicle switches invalidate stored hashes. The validator entrypoint `validate()` returns a `ValidationReport` with optional `ResolvedPlan` legs used by both the simulator and map preview endpoints.
 
 ## Files
 
-- `src/robot_copilot/main.py`
-- `PLAN.md` (normative behavior)
-
-## Run it
-
-```bash
-uv sync --locked
-uv run --no-sync uvicorn --factory robot_copilot.main:create_app --host 127.0.0.1 --port 8000
-```
-
-
-Plans are Pydantic models with `extra=forbid` so providers cannot smuggle unknown keys. Actions are a closed union: takeoff, goto, hover, photo, land, return_home. Coordinates may reference named places or explicit `xy` pairs.
-
-The chat request schema strips whitespace and rejects empty messages at validation time (HTTP 422), which keeps orchestrator code free of ad-hoc string checks:
+- `src/robot_copilot/plan.py`
+- `src/robot_copilot/schemas.py`
+- `src/robot_copilot/validator/__init__.py`
 
 ```python
-class ChatRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    conversation_id: str | None = None
-    message: str = Field(min_length=1, max_length=2000)
-    vehicle: VehicleKind = "drone"
-    battery_pct: int = Field(default=100, ge=1, le=100)
-
-    @field_validator("message")
-    @classmethod
-    def _strip_message(cls, v: str) -> str:
-        s = v.strip()
-        if not s:
-            raise ValueError("message must not be empty or whitespace only")
-        return s
+    @model_validator(mode="after")
+    def _exactly_one_target(self) -> Self:
+        has_place = self.place is not None
+        has_xy = self.xy is not None
+        if has_place == has_xy:
+            raise ValueError("exactly one of place or xy required")
+        return self
 ```
 
-`summary` is display-only; confirmation always uses the canonical plan JSON and hash.
+Chat requests are validated separately in `schemas.py` (vehicle enum, battery percent bounds, stripped non-empty message). Whitespace-only chat returns HTTP 422 without echoing the raw input.
 
+
+
+This chapter ties to the integration story in `tests/scenario/farm_day.json`: replay those steps after reading so you see how plan-schema behaves inside a long conversation with repairs, declines, and confirmations. Cross-check any prose claims against `PLAN.md` criterion numbers when you are preparing a portfolio review.
 ## Exercise
 
-Craft an invalid plan JSON missing `return_home` and run it through `validate` in a REPL. Read the `MUST_END_AT_HOME` issue.
+In a REPL, construct a `Goto` with both `place` and `xy` set and observe the validation error before the plan reaches the spatial stage.
 
 ## Checkpoint
 
-```bash
-uv run --no-sync pytest tests/unit/test_plan_schema.py -q
-```
-## Exercises
-
-Apply the checkpoint below, then read on.
-
-## What to notice in the codebase
-
-Keep a scratch log while you work: file paths, function names, and the pytest node ids you ran. When something surprises you (for example a 409 conflict or a clipped map polyline), capture the HTTP status, mission status, and audit kinds from SQLite. The tutorial checkpoints are intentionally narrow so you can run them quickly, but the real learning comes from comparing your local traces with the farm-day golden audit sequence and the validator issue templates in `explain.py`. If you change behavior, update both tests and the matching tutorial chapter so the next reader inherits an accurate story.
-
-Re-run `scripts/build_tutorials.py` after editing cited excerpts so line numbers stay honest, or update the script literals when you move code. Pair each chapter with one manual UI action (send a chat, repair once, confirm) so you see the same statuses the API tests assert.
+- `tests/unit/test_plan_schema.py`

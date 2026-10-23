@@ -44,7 +44,7 @@ def test_smoke_flow(page, base_url):
 
     first_step = page.locator('[data-testid="plan-steps"] li').first.inner_text()
     assert "Take off" in first_step
-    assert not re.match(r"^\d+\.\s+\d+\.", first_step)
+    assert not re.match(r"^\d+\.", first_step)
 
     page.locator('[data-testid="confirm-btn"]').click()
     dialog = page.locator('[data-testid="confirm-dialog"]')

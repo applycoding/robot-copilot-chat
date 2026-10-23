@@ -44,6 +44,6 @@ def test_rover_summary_wording():
     rep = validate(plan, ctx)
     assert rep.ok and rep.resolved
     text = describe_plan(rep.resolved, ctx.site)
-    assert "visit Pond" in text
+    assert "Visit Pond" in text
     assert "dock" in text
     assert "return home and land" not in text

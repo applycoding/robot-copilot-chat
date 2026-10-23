@@ -90,11 +90,6 @@ async def _read_post_body(receive: Receive, max_bytes: int) -> tuple[bytes | Non
         chunk = message.get("body", b"")
         total += len(chunk)
         if total > max_bytes:
-            if message.get("more_body"):
-                while True:
-                    drain = await receive()
-                    if drain["type"] == "http.request" and not drain.get("more_body"):
-                        break
             return None, receive
         chunks.append(chunk)
         if not message.get("more_body"):

@@ -1,28 +1,16 @@
-# Telemetry simulator
+# 09 Telemetry simulator
 
-## Goal
+`simulate` accepts only validated reports whose hash matches the resolved plan. It integrates motion per leg at timestep `dt_s`, doubles `dt` if frame count would exceed `max_frames`, and aborts with `SafetyInvariantError` if geofence or keep-out constraints are violated mid-flight.
 
-Work through **telemetry simulator** with the real robot-copilot-chat sources open beside this page.
+Frames include position, altitude, battery, and optional events (`photo`, `land`, etc.). Photos are collected on photo legs; final state must show `landed` and `at_home` for successful drone missions.
 
-## Concepts
-
-- Typed plans, validator authority, and human confirmation before simulation.
-- Chapter focus: telemetry simulator.
+Rover simulations force zero altitude on every frame. Photo events capture label, place, and timestamp for executed runs. Aborted simulations still return partial frames with `abort_reason` when invariants break mid-flight, though confirmed missions in the demo stack should always execute cleanly when validation passed.
 
 ## Files
 
-- `src/robot_copilot/main.py`
-- `PLAN.md` (normative behavior)
-
-## Run it
-
-```bash
-uv sync --locked
-uv run --no-sync uvicorn --factory robot_copilot.main:create_app --host 127.0.0.1 --port 8000
-```
-
-
-`simulate` requires a validated report whose hash matches the resolved plan. It integrates piecewise-linear motion per leg, emits frames at a configurable `dt_s`, doubles `dt` if frame caps are exceeded, and aborts if safety invariants break mid-flight.
+- `src/robot_copilot/sim/simulator.py`
+- `src/robot_copilot/sim/telemetry.py`
+- `tests/unit/test_simulator.py`
 
 ```python
 def simulate(
@@ -46,23 +34,15 @@ def simulate(
         dt *= 2
 ```
 
-Photos are recorded on photo legs; final state must show `landed` and `at_home` for successful drone missions.
+Simulator tests assert exact per-leg frame counts and that each leg endpoint appears in the stream.
 
+
+
+This chapter ties to the integration story in `tests/scenario/farm_day.json`: replay those steps after reading so you see how simulator behaves inside a long conversation with repairs, declines, and confirmations. Cross-check any prose claims against `PLAN.md` criterion numbers when you are preparing a portfolio review.
 ## Exercise
 
-Confirm every leg endpoint appears exactly once as a frame position for the North Fence plan (see simulator tests).
+Run the North Fence simulation and note how many photo events are emitted versus photos claimed in plan stats.
 
 ## Checkpoint
 
-```bash
-uv run --no-sync pytest tests/unit/test_simulator.py -q
-```
-## Exercises
-
-Apply the checkpoint below, then read on.
-
-## What to notice in the codebase
-
-Keep a scratch log while you work: file paths, function names, and the pytest node ids you ran. When something surprises you (for example a 409 conflict or a clipped map polyline), capture the HTTP status, mission status, and audit kinds from SQLite. The tutorial checkpoints are intentionally narrow so you can run them quickly, but the real learning comes from comparing your local traces with the farm-day golden audit sequence and the validator issue templates in `explain.py`. If you change behavior, update both tests and the matching tutorial chapter so the next reader inherits an accurate story.
-
-Re-run `scripts/build_tutorials.py` after editing cited excerpts so line numbers stay honest, or update the script literals when you move code. Pair each chapter with one manual UI action (send a chat, repair once, confirm) so you see the same statuses the API tests assert.
+- `tests/unit/test_simulator.py::test_frame_count_and_endpoints`

@@ -196,9 +196,10 @@ def describe_plan(resolved: ResolvedPlan, site: Site) -> str:
     if takeoff_txt:
         parts.append(takeoff_txt)
     for display, pts, photos in visits:
-        seg = f"visit {display}"
+        verb = "Visit" if plan.vehicle == "rover" else "visit"
+        seg = f"{verb} {display}"
         if pts > 1:
-            seg = f"visit {display} ({pts} points)"
+            seg = f"{verb} {display} ({pts} points)"
         if photos:
             word = "photo" if photos == 1 else "photos"
             seg = f"{seg} taking {photos} {word}"

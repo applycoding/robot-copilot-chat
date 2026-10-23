@@ -1,46 +1,44 @@
-# Testing, Docker, and CI
+# 15 Testing, Docker, and CI
 
-## Goal
+Tests are layered: pure validator units, API integration with `TestClient`, property fuzzing against `oracle.py`, provider contract tests with mock transports, the farm-day golden scenario, and Playwright e2e against a real browser. `conftest.py` installs an autouse socket guard that blocks outbound TCP except loopback, preventing accidental network during pytest.
 
-Work through **testing, docker, and ci** with the real robot-copilot-chat sources open beside this page.
+Environment scrubbing removes API keys and stray `RCC_*` variables before subprocess tutorial checks run.
 
-## Concepts
-
-- Typed plans, validator authority, and human confirmation before simulation.
-- Chapter focus: testing, docker,.
+Farm-day golden compares quantized DB snapshots including audit kind order and frame sha256. Playwright e2e runs in CI with a live uvicorn fixture. Docker smoke builds the image and curls `/healthz` to ensure packaging includes site config and static assets.
 
 ## Files
 
-- `src/robot_copilot/main.py`
-- `PLAN.md` (normative behavior)
+- `tests/conftest.py`
+- `tests/scenario/test_farm_day.py`
+- `tests/repo/test_ci_pins.py`
+- `Dockerfile`
 
-## Run it
+```python
+@pytest.fixture(autouse=True)
+def _socket_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
 
-```bash
-uv sync --locked
-uv run --no-sync uvicorn --factory robot_copilot.main:create_app --host 127.0.0.1 --port 8000
+    def guarded_connect(self, address):  # type: ignore[no-untyped-def]
+        host = address[0] if isinstance(address, tuple) else address
+        if (
+            isinstance(host, str)
+            and host not in ("127.0.0.1", "localhost", "::1")
+            and not str(host).startswith("/")
+        ):
+            raise AssertionError(f"Outbound network blocked: {host}")
+        return real_connect(self, address)
 ```
 
+CI runs ruff, mypy on `src`, pytest (e2e excluded by default marker), Playwright, Docker smoke, and gitleaks with SHA-pinned GitHub Actions.
 
-The test pyramid spans pure validator units, API integration with guarded HTTP, property fuzzing against `oracle.py`, a 32-step farm-day scenario with golden audit hashes, provider contract tests, and Playwright e2e. `conftest.py` installs a socket guard and fail-closed httpx transport so accidental outbound calls fail tests immediately.
 
-CI runs ruff, mypy on `src`, pytest (excluding e2e by default), Playwright, and a Docker smoke build. Golden files are updated only with `UPDATE_GOLDEN=1` locally.
 
+This chapter ties to the integration story in `tests/scenario/farm_day.json`: replay those steps after reading so you see how testing-docker-ci behaves inside a long conversation with repairs, declines, and confirmations. Cross-check any prose claims against `PLAN.md` criterion numbers when you are preparing a portfolio review.
 ## Exercise
 
-Run `uv run --no-sync pytest tests/scenario/test_farm_day.py -q` and inspect how many executed runs the golden file records.
+Run `uv run --no-sync pytest tests/scenario/test_farm_day.py -q` and note how many executed runs the scenario expects.
 
 ## Checkpoint
 
-```bash
-uv run --no-sync pytest tests/scenario/test_farm_day.py::test_farm_day_scenario -q
-```
-## Exercises
-
-Apply the checkpoint below, then read on.
-
-## What to notice in the codebase
-
-Keep a scratch log while you work: file paths, function names, and the pytest node ids you ran. When something surprises you (for example a 409 conflict or a clipped map polyline), capture the HTTP status, mission status, and audit kinds from SQLite. The tutorial checkpoints are intentionally narrow so you can run them quickly, but the real learning comes from comparing your local traces with the farm-day golden audit sequence and the validator issue templates in `explain.py`. If you change behavior, update both tests and the matching tutorial chapter so the next reader inherits an accurate story.
-
-Re-run `scripts/build_tutorials.py` after editing cited excerpts so line numbers stay honest, or update the script literals when you move code. Pair each chapter with one manual UI action (send a chat, repair once, confirm) so you see the same statuses the API tests assert.
+- `tests/scenario/test_farm_day.py::test_farm_day_scenario`
