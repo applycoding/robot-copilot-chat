@@ -1,0 +1,40 @@
+[defaults]
+provider = "mock"
+max_repairs = 2
+history_turns = 10
+confirm_ttl_s = 600
+site = "config/sites/demo_farm.toml"
+vehicles = "config/vehicles.toml"
+db_url = "sqlite:///data/rcc.db"
+
+[llm]
+request_timeout_s = 30
+sdk_max_retries = 1
+operation_timeout_s = 75
+provider_concurrency = 4
+
+[max_output_tokens]
+anthropic = 2048
+openai = 2048
+gemini = 2048
+xai = 2048
+
+[limits]
+max_body_bytes = 16384
+max_message_chars = 2000
+max_history_chars = 16000
+max_output_text_chars = 4000
+max_tool_args_bytes = 32768
+
+[server]
+allowed_hosts = ["localhost", "127.0.0.1"]
+
+[models]
+mock = "mock-1"
+anthropic = "claude-sonnet-5-5"
+openai = "gpt-6.1-sol"
+gemini = "gemini-3.8-flash"
+xai = "grok-4.7"
+
+[endpoints]
+xai_base_url = "https://api.x.ai/v1"

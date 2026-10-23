@@ -1,0 +1,33 @@
+[drone]
+cruise_speed_mps = 8.0
+max_speed_mps = 15.0
+vertical_speed_mps = 2.0
+min_altitude_m = 10.0
+max_altitude_m = 120.0
+default_altitude_m = 30.0
+rth_altitude_m = 30.0
+battery_capacity_wh = 90.0
+reserve_pct = 20.0
+cruise_power_w = 180.0
+hover_power_w = 160.0
+climb_wh_per_m = 0.05
+photo_s = 1.0
+photo_wh = 0.01
+max_hover_s = 120.0
+max_actions = 40
+max_distance_m = 8000.0
+max_duration_s = 1500.0
+
+[rover]
+cruise_speed_mps = 1.5
+max_speed_mps = 3.0
+battery_capacity_wh = 400.0
+reserve_pct = 20.0
+drive_power_w = 120.0
+idle_power_w = 10.0
+photo_s = 1.0
+photo_wh = 0.01
+max_hover_s = 120.0
+max_actions = 40
+max_distance_m = 4000.0
+max_duration_s = 3600.0

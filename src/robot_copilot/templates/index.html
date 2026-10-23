@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Robot Copilot Chat</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script type="application/json" id="boot-data">{{ {"version": version} | tojson }}</script>
+</head>
+<body>
+  <main>
+    <section id="chat">
+      <div id="messages"></div>
+      <textarea data-testid="chat-input" id="chat-input" rows="3"></textarea>
+      <select data-testid="vehicle-select" id="vehicle-select">
+        <option value="drone">Drone</option>
+        <option value="rover">Rover</option>
+      </select>
+      <input data-testid="battery-input" id="battery-input" type="number" min="1" max="100" value="100">
+      <button data-testid="send-btn" id="send-btn" type="button">Send</button>
+    </section>
+    <section id="mission" data-testid="mission-card" hidden>
+      <div data-testid="mission-status" id="mission-status"></div>
+      <ol data-testid="plan-steps" id="plan-steps"></ol>
+      <ul data-testid="issue-list" id="issue-list"></ul>
+      <button data-testid="repair-btn" id="repair-btn" type="button" hidden>Repair</button>
+      <button data-testid="confirm-btn" id="confirm-btn" type="button" hidden>Confirm</button>
+      <div data-testid="confirm-dialog" id="confirm-dialog" hidden>
+        <p data-testid="confirm-summary" id="confirm-summary"></p>
+        <button data-testid="execute-btn" id="execute-btn" type="button">Execute</button>
+      </div>
+    </section>
+    <section id="map-panel">
+      <svg data-testid="map-svg" id="map-svg" viewBox="-220 -170 500 490">
+        <path data-testid="plan-path" id="plan-path" d="" fill="none" stroke="#338"></path>
+        <path data-testid="exec-path" id="exec-path" d="" fill="none" stroke="#083"></path>
+        <g data-testid="vehicle-marker" id="vehicle-marker"></g>
+      </svg>
+    </section>
+    <section id="playback">
+      <button data-testid="play-btn" id="play-btn" type="button">Play</button>
+      <button data-testid="pause-btn" id="pause-btn" type="button">Pause</button>
+      <button data-testid="step-btn" id="step-btn" type="button">Step</button>
+      <button data-testid="end-btn" id="end-btn" type="button">End</button>
+      <button data-testid="reset-btn" id="reset-btn" type="button">Reset</button>
+      <select data-testid="speed-select" id="speed-select">
+        <option value="1">1x</option>
+        <option value="2">2x</option>
+      </select>
+      <div data-testid="playback-status" id="playback-status" data-status="idle">idle</div>
+      <div data-testid="telemetry" id="telemetry" data-frame-index="0"></div>
+    </section>
+  </main>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>
