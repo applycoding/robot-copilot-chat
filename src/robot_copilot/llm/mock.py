@@ -201,6 +201,7 @@ class MockProvider:
             list(raw_actions) if isinstance(raw_actions, list) else []
         )
         attempt = repair.attempt
+        adjustment_notice: str | None = None
 
         for iss in issues:
             code = iss.code
@@ -237,6 +238,14 @@ class MockProvider:
                 if loops is not None:
                     new_loops = max(1, loops // (2**attempt))
                     actions = _patrol_wrapped(new_loops, request.vehicle)
+                    if new_loops < loops:
+                        plan_dict["summary"] = (
+                            f"Patrol perimeter ({new_loops} of {loops} loops)"
+                        )
+                        adjustment_notice = (
+                            f"Repair shortened the patrol from {loops} loops to {new_loops}. "
+                            "Review the updated plan before you confirm."
+                        )
 
         plan_dict["actions"] = actions
         return normalize(
@@ -246,6 +255,7 @@ class MockProvider:
             provider=self.name,
             model=self.model,
             max_args_bytes=32768,
+            adjustment_notice=adjustment_notice,
         )
 
 

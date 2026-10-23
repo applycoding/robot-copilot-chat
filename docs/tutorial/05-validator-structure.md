@@ -4,18 +4,6 @@
 
 Structure validation is the first deterministic pass after a plan parses. It enforces vehicle-specific action sequences before any coordinates are computed. Rover takeoff is the classic teaching failure: ground vehicles cannot enter the flight state table used for drones. Issues carry action_index so the UI and explain templates cite the same step numbers.
 
-Structure validation enforces allowed action sequences before any geometry computations run. validate_structure walks actions while tracking flight state for drones and drive state for rovers. Rover missions reject takeoff because ground vehicles cannot leave the terrain model used here.
-
-Drone missions require takeoff before goto unless operating under explicit hover-only teaching examples. Land and return_home transitions reset altitude expectations checked later by spatial modules. Issue helpers attach action_index so explanations can cite step numbers understood by operators.
-
-_issue centralizes code construction with optional params consumed by explain_issue templates. Unsupported verbs for a vehicle emit unsupported_action_for_vehicle with the offending index. Empty action lists fail fast with dedicated codes rather than confusing spatial errors.
-
-Photo actions without prior goto may be flagged depending on vehicle and teaching policy encoded in tables. Structure rules cooperate with provider mock templates so intentionally bad plans surface in pytest. Validation short-circuits on first structural failure when configured, keeping reports easy to read.
-
-Mission summaries do not affect structure results; only typed actions matter here. Structure issues still include stable codes exportable to repair briefs for provider prompts. Downstream spatial validation assumes structure already rejected impossible state transitions.
-
-Teaching stacks use structure tests to show why typed plans beat free-form natural language. Rover takeoff plans demonstrate False outcomes with explicit enum values in tutorials. After editing structure tables, update unit tests and tutorial checkpoints together.
-
 ## Files
 
 - `src/robot_copilot/validator/structure.py`

@@ -68,6 +68,16 @@ function renderMission(m) {
   }
   el("mission").hidden = false;
   el("mission-status").textContent = m.status;
+  const summaryEl = el("plan-summary");
+  summaryEl.textContent = m.plan?.summary || "";
+  const noticeEl = el("adjustment-notice");
+  if (m.adjustment_notice) {
+    noticeEl.textContent = m.adjustment_notice;
+    noticeEl.hidden = false;
+  } else {
+    noticeEl.textContent = "";
+    noticeEl.hidden = true;
+  }
   const steps = el("plan-steps");
   steps.textContent = "";
   if (m.plan?.actions) {
@@ -136,7 +146,10 @@ async function repair() {
 async function confirmFlow() {
   if (!state.mission) return;
   el("confirm-dialog").hidden = false;
-  el("confirm-summary").textContent = state.mission.explanation || "";
+  const parts = [];
+  if (state.mission.adjustment_notice) parts.push(state.mission.adjustment_notice);
+  if (state.mission.explanation) parts.push(state.mission.explanation);
+  el("confirm-summary").textContent = parts.join("\n\n");
 }
 
 async function execute() {

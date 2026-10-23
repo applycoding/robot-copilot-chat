@@ -237,6 +237,7 @@ def check_spatial_and_energy(
 
     rth_blocked_reported = False
     rth_reserve_reported = False
+    reported_keep_outs: set[str] = set()
     is_drone = isinstance(veh, DroneProfile)
     home = ctx.site.home
 
@@ -254,7 +255,8 @@ def check_spatial_and_energy(
                 )
             )
         ko = segment_hits_keepout(ctx.geometry, leg.start, leg.end)
-        if ko:
+        if ko and ko not in reported_keep_outs:
+            reported_keep_outs.add(ko)
             msg, hint = explain_issue(IssueCode.ENTERS_KEEP_OUT, leg.action_index, {"keep_out": ko})
             issues.append(
                 ValidationIssue(

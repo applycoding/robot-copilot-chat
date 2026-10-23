@@ -112,17 +112,4 @@ GOAL_INTROS: dict[str, str] = {
 
 
 def goal_for_chapter(defn: dict) -> str:
-    fname = defn["fname"]
-    intro = GOAL_INTROS[fname]
-    bullets: list[str] = defn["bullets"]
-    paragraphs = [intro]
-    for i in range(0, len(bullets), 3):
-        chunk = bullets[i : i + 3]
-        sentences = []
-        for bullet in chunk:
-            text = bullet.strip()
-            if not text.endswith("."):
-                text = f"{text}."
-            sentences.append(text)
-        paragraphs.append(" ".join(sentences))
-    return "\n\n".join(paragraphs)
+    return GOAL_INTROS[defn["fname"]]

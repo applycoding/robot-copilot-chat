@@ -4,18 +4,6 @@
 
 Confirmation is compare-and-swap on plan_hash: clients must POST the hash shown with a valid mission or the API returns 409 plan_hash_mismatch without creating a run row. Orchestrator _confirm checks mission status, generation counters, and TTL before simulate runs. This chapter ties store commits to audit events so double confirms do not duplicate execution.
 
-Confirmation requires clients to POST the plan_hash shown alongside valid missions. Orchestrator._confirm verifies mission status, hash equality, and optimistic concurrency before simulation. Store.commit_confirmation writes runs, updates mission status, and records audit events atomically.
-
-Wrong hashes return HTTP 409 with plan_hash_mismatch detail codes for programmatic clients. Confirm TTL from settings retires stale missions that operators left open too long. Double confirm attempts should fail cleanly without creating duplicate run rows.
-
-Generation counters invalidate confirms when new chat supersedes awaiting missions. Executed missions hide confirm buttons in the UI and freeze repair affordances. Simulation starts only after confirmation succeeds, never directly from chat responses.
-
-Audit trails capture operator intent even when confirmation fails due to hash drift. Mission revisions store plan JSON snapshots used to recompute hashes for comparisons. Browser execute flow posts confirm then initializes playback with returned frames.
-
-CAS failures surface stale conflict codes so clients can refresh mission views. Teaching stacks emphasize hashes because JSON pretty-printing can change without semantic edits. Hash algorithms live in validator modules to keep confirm and simulate aligned.
-
-Provider changes between chat and confirm should change hashes, blocking outdated confirms. Integration tests cover wrong hash paths without needing manual UI clicking. Portfolio discussions should mention human confirmation as authorization, not cosmetic UX.
-
 ## Files
 
 - `src/robot_copilot/orchestrator.py`

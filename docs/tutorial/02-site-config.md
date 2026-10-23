@@ -4,18 +4,6 @@
 
 Every validator and map overlay reads the same demo farm loaded from TOML. Here you learn how place names normalize, how aliases resolve informal operator text, and why polygon validation fails fast when a site file is inconsistent. Path places such as North Fence matter later for inspect loops, patrol geometry, and simulator frame counts.
 
-Sites load from TOML under config/sites with geofence polygons, keep-outs, and named places. normalize_name case-folds text, strips punctuation, and removes a leading article before comparisons. Aliases on places let operators type informal labels while canonical names stay cartographer friendly.
-
-load_site validates polygon orientation, margins, and place kind constraints before returning a Site dataclass. resolve_place walks aliases after normalization so mock regex captures need not list every spelling. Path places expose multiple vertices used by perimeter patrol mock plans and spatial energy legs.
-
-Keep-out margins expand polygons slightly so numerical edge cases do not graze forbidden airspace. Home coordinates anchor return-home energy calculations and simulator final state checks. SiteGeometry builds spatial indexes consumed by segment_hits_keepout and geofence tests.
-
-Vehicle profiles load separately from vehicles.toml and attach to ValidationContext per request. Demo farm includes Barn, Pond, substation keep-out, and North Fence path used throughout pytest. Site summary JSON feeds provider tools so models see counts without dumping full coordinate lists.
-
-Changing demo_farm.toml requires consistency tests so README phrases still match validator outcomes. Invalid polygons raise SiteLoadError with human-readable problems instead of silent Shapely failures. Place kinds distinguish point targets from polylines, affecting inspect loops and visit copy.
-
-Tutorial operators should treat site edits as contract changes reviewed by unit and scenario tests. Map rendering uses the same site payload as validators, avoiding drift between UI and physics. This chapter pairs normalization with full loader validation to show failures happen early.
-
 ## Files
 
 - `src/robot_copilot/site.py`

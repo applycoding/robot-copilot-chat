@@ -36,7 +36,7 @@ def test_bad_origin(guarded_client: TestClient):
 def test_non_json_content_type(guarded_client: TestClient):
     r = guarded_client.post(
         "/api/chat",
-        data="x",
+        content=b"x",
         headers={"Content-Type": "text/plain"},
     )
     assert r.status_code == 415

@@ -4,18 +4,6 @@
 
 Extending the stack means updating schemas, validators, simulator motion, mock regex routes, and tool_specs together so providers cannot invent silent new action types. build_site_summary compresses places for prompts without dumping full coordinate lists. Demo farm consistency tests lock patrol calibration so README phrases and tutorial Try it commands stay truthful.
 
-tool_specs defines JSON schemas for propose and decline tools shared across providers. build_site_summary compresses places and keep-outs into compact dicts for model prompts. Adding a new action type requires plan schema updates, validator passes, simulator support, and mock routing.
-
-Site summary point counts drive inspect loops without sending full coordinate arrays to models. Extending demo_farm.toml demands demo site consistency tests and README updates together. New vehicles need profiles in vehicles.toml plus structure rules and UI select options.
-
-Tool arg byte limits protect SQLite from oversized provider payloads during normalize. Registry changes must remain explicit; hidden auto-discovery of providers is intentionally avoided. Hygiene and tutorial tests guard documentation quality when contributors add features.
-
-Mock provider remains the reference implementation for tool-call behavior new clouds must match. Path preview generation may need updates when new action types alter resolved leg lists. Explain templates require IssueCode entries for any new validator failures introduced.
-
-Simulation frame builders must understand geometry for new motion primitives you add. API schemas and OpenAPI-disabled policy mean HTTP contracts change only with tests updated. Consider property tests when adding validators to catch regressions across randomized plans.
-
-Document new features in tutorial checkpoints only after pytest covers schema, validator, simulator, and mock paths. Site summaries should stay small; prefer counts and names over dumping vertices. Extension work is complete when farm day scenarios and tutorial try-it blocks still pass unchanged.
-
 ## Files
 
 - `src/robot_copilot/tools.py`

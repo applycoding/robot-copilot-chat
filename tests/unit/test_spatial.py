@@ -5,7 +5,7 @@ from robot_copilot.validator.issues import IssueCode
 from tests.helpers import plan_from_json
 
 
-def test_substation_keepout(ctx):
+def test_substation_keepout_dedupes_keepout_code(ctx):
     p = plan_from_json(
         {
             "vehicle": "drone",
@@ -18,8 +18,10 @@ def test_substation_keepout(ctx):
         }
     )
     rep = validate(p, ctx)
+    ko_issues = [i for i in rep.issues if i.code == IssueCode.ENTERS_KEEP_OUT]
+    assert len(ko_issues) == 1
     codes = {i.code for i in rep.issues}
-    assert IssueCode.ENTERS_KEEP_OUT in codes or IssueCode.RTH_PATH_BLOCKED in codes
+    assert IssueCode.RTH_PATH_BLOCKED in codes
 
 
 def test_valid_barn_goto(ctx):
