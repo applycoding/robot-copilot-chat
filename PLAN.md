@@ -480,19 +480,27 @@ xai_base_url = "https://api.x.ai/v1"
 
 ```python
 class ProviderName(StrEnum):
-    MOCK = "mock"; ANTHROPIC = "anthropic"; OPENAI = "openai"; GEMINI = "gemini"; XAI = "xai"
+    MOCK = "mock"
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    GEMINI = "gemini"
+    XAI = "xai"
+
 
 API_KEY_ENV: Final[dict[ProviderName, str]] = {
-    ProviderName.ANTHROPIC: "ANTHROPIC_API_KEY", ProviderName.OPENAI: "OPENAI_API_KEY",
-    ProviderName.GEMINI: "GEMINI_API_KEY", ProviderName.XAI: "XAI_API_KEY",
+    ProviderName.ANTHROPIC: "ANTHROPIC_API_KEY",
+    ProviderName.OPENAI: "OPENAI_API_KEY",
+    ProviderName.GEMINI: "GEMINI_API_KEY",
+    ProviderName.XAI: "XAI_API_KEY",
 }
+
 
 class AppSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     root: Path
     provider: ProviderName
     model: str
-    api_key: SecretStr | None              # None only for mock
+    api_key: SecretStr | None  # None only for mock
     xai_base_url: str
     site_path: Path
     vehicles_path: Path
@@ -504,17 +512,23 @@ class AppSettings(BaseModel):
     sdk_max_retries: int = Field(ge=0, le=3)
     operation_timeout_s: float = Field(gt=0, le=300)
     provider_concurrency: int = Field(ge=1, le=32)
-    max_output_tokens: int = Field(ge=256, le=8192)     # for the selected provider
-    max_body_bytes: int; max_message_chars: int; max_history_chars: int
-    max_output_text_chars: int; max_tool_args_bytes: int
+    max_output_tokens: int = Field(ge=256, le=8192)  # for the selected provider
+    max_body_bytes: int
+    max_message_chars: int
+    max_history_chars: int
+    max_output_text_chars: int
+    max_tool_args_bytes: int
     allowed_hosts: tuple[str, ...]
     instance_nonce: str
 
-class SettingsError(Exception): ...    # names the env var / file + line number; never echoes values
+
+class SettingsError(Exception): ...  # names the env var / file + line number; never echoes values
+
 
 def read_dotenv(path: Path) -> dict[str, str]: ...
-def load_settings(env: Mapping[str, str] | None = None, *,
-                  dotenv_enabled: bool = True) -> AppSettings: ...
+def load_settings(
+    env: Mapping[str, str] | None = None, *, dotenv_enabled: bool = True
+) -> AppSettings: ...
 ```
 
 **`.env` grammar** (tested in `test_dotenv.py`):
@@ -530,8 +544,10 @@ def load_settings(env: Mapping[str, str] | None = None, *,
 ```python
 Coord = tuple[float, float]
 
-class _Frozen(BaseModel):          # trusted config: frozen, tuples for deep immutability
+
+class _Frozen(BaseModel):  # trusted config: frozen, tuples for deep immutability
     model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
+
 
 class Place(_Frozen):
     name: str = Field(min_length=1, max_length=64)
@@ -539,53 +555,82 @@ class Place(_Frozen):
     kind: Literal["point", "path"]
     points: tuple[Coord, ...] = Field(min_length=1)
 
+
 class KeepOut(_Frozen):
     name: str
     polygon: tuple[Coord, ...] = Field(min_length=3)
     margin_m: float = Field(ge=0)
 
+
 class Site(_Frozen):
-    id: str; name: str; home: Coord
+    id: str
+    name: str
+    home: Coord
     geofence: tuple[Coord, ...] = Field(min_length=3)
     geofence_margin_m: float = Field(ge=0)
     keep_out: tuple[KeepOut, ...] = ()
     places: tuple[Place, ...]
-    def fingerprint(self) -> str: ...           # sha256 of canonical JSON
+
+    def fingerprint(self) -> str: ...  # sha256 of canonical JSON
+
 
 class SiteConfigError(Exception):
     problems: list[str]
 
-def load_site(path: Path) -> Site: ...           # tomllib + all checks in §6 "Config"
-def normalize_name(text: str) -> str: ...        # casefold, strip punctuation, collapse spaces, drop leading "the "
+
+def load_site(path: Path) -> Site: ...  # tomllib + all checks in §6 "Config"
+def normalize_name(
+    text: str,
+) -> str: ...  # casefold, strip punctuation, collapse spaces, drop leading "the "
 def resolve_place(site: Site, name: str) -> Place | None: ...
 def suggest_places(site: Site, name: str, n: int = 3) -> list[str]: ...  # difflib, cutoff 0.6
 
+
 @dataclass(frozen=True)
 class SiteGeometry:
-    fence_inset: Polygon                          # geofence.buffer(-geofence_margin_m); must be one non-empty Polygon
-    keep_outs: tuple[tuple[str, Polygon], ...]    # polygon.buffer(margin_m)
+    fence_inset: Polygon  # geofence.buffer(-geofence_margin_m); must be one non-empty Polygon
+    keep_outs: tuple[tuple[str, Polygon], ...]  # polygon.buffer(margin_m)
+
     @classmethod
     def build(cls, site: Site) -> "SiteGeometry": ...
 
+
 VehicleKind = Literal["drone", "rover"]
 
+
 class _VehicleBase(_Frozen):
-    cruise_speed_mps: float; max_speed_mps: float
-    battery_capacity_wh: float; reserve_pct: float
-    photo_s: float; photo_wh: float; max_hover_s: float
-    max_actions: int; max_distance_m: float; max_duration_s: float
+    cruise_speed_mps: float
+    max_speed_mps: float
+    battery_capacity_wh: float
+    reserve_pct: float
+    photo_s: float
+    photo_wh: float
+    max_hover_s: float
+    max_actions: int
+    max_distance_m: float
+    max_duration_s: float
+
 
 class DroneProfile(_VehicleBase):
     kind: Literal["drone"] = "drone"
-    vertical_speed_mps: float; min_altitude_m: float; max_altitude_m: float
-    default_altitude_m: float; rth_altitude_m: float
-    cruise_power_w: float; hover_power_w: float; climb_wh_per_m: float
+    vertical_speed_mps: float
+    min_altitude_m: float
+    max_altitude_m: float
+    default_altitude_m: float
+    rth_altitude_m: float
+    cruise_power_w: float
+    hover_power_w: float
+    climb_wh_per_m: float
+
 
 class RoverProfile(_VehicleBase):
     kind: Literal["rover"] = "rover"
-    drive_power_w: float; idle_power_w: float
+    drive_power_w: float
+    idle_power_w: float
 
-def load_vehicles(path: Path) -> dict[VehicleKind, DroneProfile | RoverProfile]: ...
+
+def load_vehicles(path: Path) -> dict[VehicleKind, DroneProfile | RoverProfile]:
+    ...
     # rejects (all listed): non-positive speeds/powers/capacity/vertical speed/max_hover_s/limits;
     # negative photo_s/photo_wh/climb_wh_per_m; reserve_pct outside [0, 100];
     # not (min <= default <= rth <= max altitude); cruise > max speed; max_actions < 1
@@ -597,44 +642,57 @@ def load_vehicles(path: Path) -> dict[VehicleKind, DroneProfile | RoverProfile]:
 class _Strict(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False, strict=True)
 
+
 class XY(_Strict):
     x_m: float = Field(ge=-10_000, le=10_000)
     y_m: float = Field(ge=-10_000, le=10_000)
+
 
 class Takeoff(_Strict):
     type: Literal["takeoff"]
     altitude_m: float = Field(description="Target altitude above home, metres")
 
+
 class Goto(_Strict):
     type: Literal["goto"]
-    place: str | None = Field(default=None, max_length=64, description="Named place from the site list")
+    place: str | None = Field(
+        default=None, max_length=64, description="Named place from the site list"
+    )
     point_index: int | None = Field(default=None, ge=0, description="Required for path places")
     xy: XY | None = Field(default=None, description="Explicit local coordinates, metres")
     altitude_m: float | None = Field(default=None, description="Drone only; default = current")
     speed_mps: float | None = Field(default=None, description="Default = vehicle cruise speed")
+
     @model_validator(mode="after")
-    def _exactly_one_target(self) -> Self: ...   # exactly one of place / xy
+    def _exactly_one_target(self) -> Self: ...  # exactly one of place / xy
+
 
 class Hover(_Strict):
     type: Literal["hover"]
     seconds: float
 
+
 class Photo(_Strict):
     type: Literal["photo"]
     label: str | None = Field(default=None, max_length=64)
 
+
 class Land(_Strict):
     type: Literal["land"]
+
 
 class ReturnHome(_Strict):
     type: Literal["return_home"]
 
+
 Action = Annotated[Takeoff | Goto | Hover | Photo | Land | ReturnHome, Field(discriminator="type")]
+
 
 class MissionPlan(_Strict):
     vehicle: Literal["drone", "rover"]
-    summary: str = Field(max_length=280)            # LLM text: shown escaped, never used for confirmation
+    summary: str = Field(max_length=280)  # LLM text: shown escaped, never used for confirmation
     actions: tuple[Action, ...] = Field(min_length=1, max_length=200)
+
 
 class DeclineRequest(_Strict):
     reason: str = Field(min_length=1, max_length=500)
@@ -658,19 +716,23 @@ class DeclineRequest(_Strict):
 PROPOSE_TOOL = "propose_mission_plan"
 DECLINE_TOOL = "decline_request"
 
+
 class ToolSpec(BaseModel):
     name: str
     description: str
-    parameters: dict[str, Any]          # JSON Schema, $refs inlined, no "discriminator"/"title"
+    parameters: dict[str, Any]  # JSON Schema, $refs inlined, no "discriminator"/"title"
+
 
 def inline_schema(model: type[BaseModel]) -> dict[str, Any]: ...
 def tool_specs() -> list[ToolSpec]: ...
 
+
 class SiteSummary(BaseModel):
     site_name: str
-    places: list[dict[str, Any]]        # name, aliases, kind, point_count
+    places: list[dict[str, Any]]  # name, aliases, kind, point_count
     keep_outs: list[str]
-    limits: dict[str, float]            # from vehicle profile, informational only
+    limits: dict[str, float]  # from vehicle profile, informational only
+
 
 def build_site_summary(site: Site, vehicle: DroneProfile | RoverProfile) -> SiteSummary: ...
 def build_system_prompt(summary: SiteSummary, vehicle: VehicleKind) -> str: ...
@@ -689,66 +751,104 @@ The system prompt tells the model to:
 ```python
 VALIDATOR_VERSION: Final = "1.0.0"
 
+
 class IssueCode(StrEnum):
-    SCHEMA = "schema"; MALFORMED_OUTPUT = "malformed_output"; VEHICLE_MISMATCH = "vehicle_mismatch"
+    SCHEMA = "schema"
+    MALFORMED_OUTPUT = "malformed_output"
+    VEHICLE_MISMATCH = "vehicle_mismatch"
     UNSUPPORTED_ACTION_FOR_VEHICLE = "unsupported_action_for_vehicle"
-    SEQUENCE = "sequence"; UNKNOWN_PLACE = "unknown_place"; BAD_POINT_INDEX = "bad_point_index"
-    ALTITUDE_LOW = "altitude_low"; ALTITUDE_HIGH = "altitude_high"
+    SEQUENCE = "sequence"
+    UNKNOWN_PLACE = "unknown_place"
+    BAD_POINT_INDEX = "bad_point_index"
+    ALTITUDE_LOW = "altitude_low"
+    ALTITUDE_HIGH = "altitude_high"
     ALTITUDE_ON_GROUND_VEHICLE = "altitude_on_ground_vehicle"
-    SPEED_HIGH = "speed_high"; SPEED_NONPOSITIVE = "speed_nonpositive"
-    HOVER_INVALID = "hover_invalid"; HOVER_TOO_LONG = "hover_too_long"
+    SPEED_HIGH = "speed_high"
+    SPEED_NONPOSITIVE = "speed_nonpositive"
+    HOVER_INVALID = "hover_invalid"
+    HOVER_TOO_LONG = "hover_too_long"
     TOO_MANY_ACTIONS = "too_many_actions"
-    OUTSIDE_GEOFENCE = "outside_geofence"; ENTERS_KEEP_OUT = "enters_keep_out"
-    TOO_LONG_DISTANCE = "too_long_distance"; TOO_LONG_DURATION = "too_long_duration"
-    BATTERY_INSUFFICIENT = "battery_insufficient"; RTH_RESERVE_VIOLATED = "rth_reserve_violated"
-    RTH_PATH_BLOCKED = "rth_path_blocked"; MUST_END_AT_HOME = "must_end_at_home"
+    OUTSIDE_GEOFENCE = "outside_geofence"
+    ENTERS_KEEP_OUT = "enters_keep_out"
+    TOO_LONG_DISTANCE = "too_long_distance"
+    TOO_LONG_DURATION = "too_long_duration"
+    BATTERY_INSUFFICIENT = "battery_insufficient"
+    RTH_RESERVE_VIOLATED = "rth_reserve_violated"
+    RTH_PATH_BLOCKED = "rth_path_blocked"
+    MUST_END_AT_HOME = "must_end_at_home"
+
+
 # MALFORMED_OUTPUT is produced by the orchestrator from the normalization table (§5.7), never by validate().
 
-class _Art(BaseModel):                     # validated artifacts: frozen, tuples only
+
+class _Art(BaseModel):  # validated artifacts: frozen, tuples only
     model_config = ConfigDict(frozen=True, extra="forbid")
+
 
 class ValidationIssue(_Art):
     code: IssueCode
     severity: Literal["error", "warning"]
-    action_index: int | None              # 0-based; shown to user as "step N+1"
+    action_index: int | None  # 0-based; shown to user as "step N+1"
     params: tuple[tuple[str, str | int | float], ...]
-    message: str                          # filled by explain.explain_issue
+    message: str  # filled by explain.explain_issue
     hint: str
 
+
 class XYZ(_Art):
-    x_m: float; y_m: float; alt_m: float
+    x_m: float
+    y_m: float
+    alt_m: float
+
 
 class Leg(_Art):
     action_index: int
     kind: Literal["climb", "move", "descend", "hover", "photo"]
-    start: XYZ; end: XYZ
-    speed_mps: float; distance_m: float; duration_s: float
-    energy_wh: float; battery_after_wh: float
-    rth_wh: float; rth_margin_wh: float    # battery_after - rth_wh - reserve
+    start: XYZ
+    end: XYZ
+    speed_mps: float
+    distance_m: float
+    duration_s: float
+    energy_wh: float
+    battery_after_wh: float
+    rth_wh: float
+    rth_margin_wh: float  # battery_after - rth_wh - reserve
+
 
 class PlanStats(_Art):
-    distance_m: float                      # horizontal move distance
-    vertical_m: float                      # climb + descent
-    duration_s: float; energy_wh: float
-    battery_start_wh: float; battery_end_wh: float; reserve_wh: float
-    photos: int; min_rth_margin_wh: float
+    distance_m: float  # horizontal move distance
+    vertical_m: float  # climb + descent
+    duration_s: float
+    energy_wh: float
+    battery_start_wh: float
+    battery_end_wh: float
+    reserve_wh: float
+    photos: int
+    min_rth_margin_wh: float
+
 
 class ResolvedPlan(_Art):
     plan: MissionPlan
     legs: tuple[Leg, ...]
     stats: PlanStats
 
+
 class ValidationReport(_Art):
-    ok: bool                              # no error-severity issues
-    issues: tuple[ValidationIssue, ...]   # sorted by issue_sort_key
-    resolved: ResolvedPlan | None         # None when phase 1/2 failed
-    plan_hash: str | None                 # None when schema failed
+    ok: bool  # no error-severity issues
+    issues: tuple[ValidationIssue, ...]  # sorted by issue_sort_key
+    resolved: ResolvedPlan | None  # None when phase 1/2 failed
+    plan_hash: str | None  # None when schema failed
     validator_version: str
+
 
 def issue_sort_key(i: ValidationIssue) -> tuple[int, int, str, str]:
     # (0, 0, …) for action_index is None, else (1, action_index, …): step 0 is a real step
-    return (0 if i.action_index is None else 1,
-            0 if i.action_index is None else i.action_index, i.code, canonical_json(i.params))
+    return (
+        0 if i.action_index is None else 1,
+        0 if i.action_index is None else i.action_index,
+        i.code,
+        canonical_json(i.params),
+    )
+
 
 @dataclass(frozen=True)
 class ValidationContext:
@@ -757,9 +857,13 @@ class ValidationContext:
     vehicle: DroneProfile | RoverProfile
     battery_pct: int
 
-def validate_raw(tool_args: Mapping[str, object], ctx: ValidationContext) -> tuple[MissionPlan | None, ValidationReport]: ...
+
+def validate_raw(
+    tool_args: Mapping[str, object], ctx: ValidationContext
+) -> tuple[MissionPlan | None, ValidationReport]: ...
 def validate(plan: MissionPlan, ctx: ValidationContext) -> ValidationReport: ...
-def plan_hash(plan: MissionPlan, ctx: ValidationContext) -> str: ...
+def plan_hash(plan: MissionPlan, ctx: ValidationContext) -> str:
+    ...
     # sha256(canonical plan JSON | site.fingerprint | vehicle JSON | battery_pct | VALIDATOR_VERSION)
 ```
 
@@ -830,9 +934,13 @@ Durations: move `d / speed`; climb/descent `dz / vertical_speed_mps`; hover `s`;
 **explain.py**
 
 ```python
-TEMPLATES: Final[dict[IssueCode, tuple[str, str]]]    # (message template, hint template)
-def explain_issue(code: IssueCode, action_index: int | None, params: Mapping[str, object]) -> tuple[str, str]: ...
-def describe_plan(resolved: ResolvedPlan, site: Site) -> str: ...    # from resolved actions only
+TEMPLATES: Final[dict[IssueCode, tuple[str, str]]]  # (message template, hint template)
+
+
+def explain_issue(
+    code: IssueCode, action_index: int | None, params: Mapping[str, object]
+) -> tuple[str, str]: ...
+def describe_plan(resolved: ResolvedPlan, site: Site) -> str: ...  # from resolved actions only
 def describe_report(report: ValidationReport, site: Site, max_issues: int = 20) -> str: ...
 def describe_decline(decline: DeclineRequest) -> str: ...
 ```
@@ -853,52 +961,82 @@ class ChatTurn(BaseModel):
     role: Literal["user", "assistant"]
     content: str
 
+
 class IssueBrief(BaseModel):
-    code: str; action_index: int | None; message: str
+    code: str
+    action_index: int | None
+    message: str
+
 
 class RepairContext(BaseModel):
-    attempt: int = Field(ge=1)                       # 1..max_repairs
+    attempt: int = Field(ge=1)  # 1..max_repairs
     previous_plan: dict[str, object] | None
     issues: list[IssueBrief]
 
+
 class ProposalRequest(BaseModel):
     system_prompt: str
-    history: list[ChatTurn]                          # ≤ history_turns and ≤ max_history_chars
+    history: list[ChatTurn]  # ≤ history_turns and ≤ max_history_chars
     user_message: str
     vehicle: VehicleKind
     site_summary: SiteSummary
     tools: list[ToolSpec]
     repair: RepairContext | None = None
 
-class Usage(BaseModel):
-    input_tokens: int | None = None; output_tokens: int | None = None
 
-MalformedReason = Literal["multiple_tool_calls", "unknown_tool", "bad_arguments", "too_large",
-                          "incomplete", "refused", "blocked", "empty"]
+class Usage(BaseModel):
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
+MalformedReason = Literal[
+    "multiple_tool_calls",
+    "unknown_tool",
+    "bad_arguments",
+    "too_large",
+    "incomplete",
+    "refused",
+    "blocked",
+    "empty",
+]
+
 
 class ProviderResult(BaseModel):
     kind: Literal["plan", "decline", "text", "malformed"]
-    tool_args: dict[str, object] | None = None       # plan / decline
-    text: str | None = None                          # truncated to max_output_text_chars
+    tool_args: dict[str, object] | None = None  # plan / decline
+    text: str | None = None  # truncated to max_output_text_chars
     malformed_reason: MalformedReason | None = None
     provider: str
     model: str
     usage: Usage | None = None
 
+
 class ProviderError(Exception):
-    def __init__(self, kind: Literal["auth", "rate_limit", "timeout", "unavailable", "protocol"],
-                 message: str) -> None: ...          # message passed through redact()
+    def __init__(
+        self,
+        kind: Literal["auth", "rate_limit", "timeout", "unavailable", "protocol"],
+        message: str,
+    ) -> None: ...  # message passed through redact()
+
 
 class LLMProvider(Protocol):
     name: str
     model: str
+
     async def propose(self, request: ProposalRequest) -> ProviderResult: ...
-    async def aclose(self) -> None: ...              # called in lifespan shutdown
+    async def aclose(self) -> None: ...  # called in lifespan shutdown
+
 
 def render_repair_message(repair: RepairContext) -> str: ...
-def normalize(calls: Sequence[tuple[str, str | Mapping[str, object]]], text: str | None,
-              stop: Literal["complete", "max_tokens", "refused", "blocked"],
-              *, provider: str, model: str, max_args_bytes: int) -> ProviderResult: ...
+def normalize(
+    calls: Sequence[tuple[str, str | Mapping[str, object]]],
+    text: str | None,
+    stop: Literal["complete", "max_tokens", "refused", "blocked"],
+    *,
+    provider: str,
+    model: str,
+    max_args_bytes: int,
+) -> ProviderResult: ...
 ```
 
 **Normalization table** (`llm/normalize.py`, applied by every adapter and the mock):
@@ -934,8 +1072,17 @@ class AnthropicProvider:
     #   description, input_schema}], tool_choice={"type":"auto","disable_parallel_tool_use":True})
     # messages are built with the SDK's role-specific user/assistant MessageParam types (no raw dicts).
     # stop_reason "max_tokens" -> stop="max_tokens" (malformed); "refusal" -> stop="refused".
-    def __init__(self, model: str, api_key: SecretStr, *, timeout_s: float, max_retries: int,
-                 max_output_tokens: int, client: anthropic.AsyncAnthropic | None = None) -> None: ...
+    def __init__(
+        self,
+        model: str,
+        api_key: SecretStr,
+        *,
+        timeout_s: float,
+        max_retries: int,
+        max_output_tokens: int,
+        client: anthropic.AsyncAnthropic | None = None,
+    ) -> None: ...
+
 
 class OpenAIProvider:
     # client.responses.create(model, instructions, input=[{role, content}],
@@ -943,12 +1090,22 @@ class OpenAIProvider:
     #   tool_choice="auto", parallel_tool_calls=False, store=False, max_output_tokens=...)
     # function_call items -> calls; output_text -> text; status "incomplete" -> stop="max_tokens";
     # refusal content -> stop="refused".
-    def __init__(self, model: str, api_key: SecretStr, *, base_url: str | None = None,
-                 timeout_s: float, max_retries: int, max_output_tokens: int,
-                 client: openai.AsyncOpenAI | None = None) -> None: ...
+    def __init__(
+        self,
+        model: str,
+        api_key: SecretStr,
+        *,
+        base_url: str | None = None,
+        timeout_s: float,
+        max_retries: int,
+        max_output_tokens: int,
+        client: openai.AsyncOpenAI | None = None,
+    ) -> None: ...
 
-class XAIProvider(OpenAIProvider):   # name="xai", base_url from config (https://api.x.ai/v1)
+
+class XAIProvider(OpenAIProvider):  # name="xai", base_url from config (https://api.x.ai/v1)
     ...
+
 
 class GeminiProvider:
     # genai.Client(api_key, http_options=types.HttpOptions(timeout=int(timeout_s * 1000),   # milliseconds
@@ -959,15 +1116,26 @@ class GeminiProvider:
     #   FunctionCallingConfig(mode="AUTO")), automatic_function_calling=AutomaticFunctionCallingConfig(disable=True)))
     # finish_reason MAX_TOKENS -> "max_tokens"; SAFETY/PROHIBITED_CONTENT/BLOCKLIST or prompt block -> "blocked".
     # aclose(): await client.aio.aclose()
-    def __init__(self, model: str, api_key: SecretStr, *, timeout_s: float, max_retries: int,
-                 max_output_tokens: int, client: genai.Client | None = None) -> None: ...
+    def __init__(
+        self,
+        model: str,
+        api_key: SecretStr,
+        *,
+        timeout_s: float,
+        max_retries: int,
+        max_output_tokens: int,
+        client: genai.Client | None = None,
+    ) -> None: ...
+
 
 class MockProvider:
     name = "mock"
-    def __init__(self, model: str) -> None: ...      # model id always from config
+
+    def __init__(self, model: str) -> None: ...  # model id always from config
     async def propose(self, request: ProposalRequest) -> ProviderResult: ...
 
-def build_provider(settings: AppSettings) -> LLMProvider: ...   # llm/registry.py
+
+def build_provider(settings: AppSettings) -> LLMProvider: ...  # llm/registry.py
 ```
 
 SDK exceptions map to `ProviderError` kinds:
@@ -1017,24 +1185,39 @@ Unknown `<place>` text is passed through verbatim as `goto.place`, so the valida
 
 ```python
 class ConflictCode(StrEnum):
-    PLAN_HASH_MISMATCH = "plan_hash_mismatch"; NOT_CONFIRMABLE = "not_confirmable"
-    CONFIRMATION_EXPIRED = "confirmation_expired"; REVALIDATION_FAILED = "revalidation_failed"
-    NOT_REPAIRABLE = "not_repairable"; REPAIR_LIMIT = "repair_limit"
-    STALE = "stale"; NO_VALID_PLAN = "no_valid_plan"
+    PLAN_HASH_MISMATCH = "plan_hash_mismatch"
+    NOT_CONFIRMABLE = "not_confirmable"
+    CONFIRMATION_EXPIRED = "confirmation_expired"
+    REVALIDATION_FAILED = "revalidation_failed"
+    NOT_REPAIRABLE = "not_repairable"
+    REPAIR_LIMIT = "repair_limit"
+    STALE = "stale"
+    NO_VALID_PLAN = "no_valid_plan"
+
 
 class ConflictError(Exception):
     code: ConflictCode
-    message: str                                   # plain English
+    message: str  # plain English
+
 
 class Orchestrator:
-    def __init__(self, provider: LLMProvider, store: Store, site: Site, geometry: SiteGeometry,
-                 vehicles: Mapping[VehicleKind, DroneProfile | RoverProfile], settings: AppSettings,
-                 clock: Callable[[], datetime]) -> None: ...   # clock returns UTC-aware datetimes
+    def __init__(
+        self,
+        provider: LLMProvider,
+        store: Store,
+        site: Site,
+        geometry: SiteGeometry,
+        vehicles: Mapping[VehicleKind, DroneProfile | RoverProfile],
+        settings: AppSettings,
+        clock: Callable[[], datetime],
+    ) -> None: ...  # clock returns UTC-aware datetimes
     async def chat(self, req: ChatRequest) -> ChatResponse: ...
     async def repair(self, mission_id: str) -> ChatResponse: ...
     async def confirm_and_execute(self, mission_id: str, plan_hash: str) -> RunView: ...
     def get_mission(self, mission_id: str) -> MissionView: ...
-    def get_commands(self, mission_id: str) -> list[Leg]: ...   # re-validates stored plan; fresh legs
+    def get_commands(
+        self, mission_id: str
+    ) -> list[Leg]: ...  # re-validates stored plan; fresh legs
     def get_run(self, run_id: str) -> RunView: ...
 ```
 
@@ -1101,25 +1284,50 @@ Every rejection writes the audit event `confirm_rejected` in its own short trans
 
 ```python
 class NotValidatedError(Exception): ...
+
+
 class SafetyInvariantError(Exception): ...
 
+
 class Frame(BaseModel):
-    t_s: float; x_m: float; y_m: float; alt_m: float; battery_wh: float; action_index: int
+    t_s: float
+    x_m: float
+    y_m: float
+    alt_m: float
+    battery_wh: float
+    action_index: int
     event: Literal["takeoff", "waypoint", "hover_start", "photo", "land", "home"] | None = None
 
+
 class FinalState(BaseModel):
-    x_m: float; y_m: float; alt_m: float; battery_wh: float; landed: bool; at_home: bool
+    x_m: float
+    y_m: float
+    alt_m: float
+    battery_wh: float
+    landed: bool
+    at_home: bool
+
 
 class PhotoEvent(BaseModel):
-    t_s: float; x_m: float; y_m: float; alt_m: float; label: str | None; action_index: int
+    t_s: float
+    x_m: float
+    y_m: float
+    alt_m: float
+    label: str | None
+    action_index: int
+
 
 class SimResult(BaseModel):
     status: Literal["executed", "aborted"]
-    frames: tuple[Frame, ...]; photos: tuple[PhotoEvent, ...]; final_state: FinalState
+    frames: tuple[Frame, ...]
+    photos: tuple[PhotoEvent, ...]
+    final_state: FinalState
     abort_reason: str | None = None
 
-def simulate(report: ValidationReport, ctx: ValidationContext, *, dt_s: float = 0.5,
-             max_frames: int = 4000) -> SimResult: ...
+
+def simulate(
+    report: ValidationReport, ctx: ValidationContext, *, dt_s: float = 0.5, max_frames: int = 4000
+) -> SimResult: ...
 ```
 
 **`simulate` semantics**
@@ -1147,8 +1355,10 @@ def simulate(report: ValidationReport, ctx: ValidationContext, *, dt_s: float = 
 
 ```python
 class Store:
-    def __init__(self, engine: Engine, clock: Callable[[], datetime],
-                 id_factory: Callable[[], str]) -> None: ...
+    def __init__(
+        self, engine: Engine, clock: Callable[[], datetime], id_factory: Callable[[], str]
+    ) -> None: ...
+
     # create_conversation, add_message_and_bump_generation, recent_turns, create_mission_if_generation,
     # reserve_repair(mission_id, rev, attempts) -> bool, commit_repair(snapshot, ...) -> bool,
     # commit_confirmation(snapshot, run, events) -> bool, audit, get_*;
@@ -1160,23 +1370,43 @@ class Store:
 ```python
 class ChatRequest(BaseModel):
     conversation_id: str | None = None
-    message: str = Field(min_length=1, max_length=2000)    # whitespace-only rejected
+    message: str = Field(min_length=1, max_length=2000)  # whitespace-only rejected
     vehicle: Literal["drone", "rover"] = "drone"
     battery_pct: int = Field(default=100, ge=1, le=100)
 
-class RepairRequest(BaseModel): ...                        # body must be {}
+
+class RepairRequest(BaseModel): ...  # body must be {}
+
 
 class MissionStatus(StrEnum):
-    VALID = "valid"; INVALID = "invalid"; REPAIRING = "repairing"; DECLINED = "declined"
-    REPAIR_EXHAUSTED = "repair_exhausted"; SUPERSEDED = "superseded"
-    EXECUTED = "executed"; ABORTED = "aborted"
+    VALID = "valid"
+    INVALID = "invalid"
+    REPAIRING = "repairing"
+    DECLINED = "declined"
+    REPAIR_EXHAUSTED = "repair_exhausted"
+    SUPERSEDED = "superseded"
+    EXECUTED = "executed"
+    ABORTED = "aborted"
+
 
 class MissionView(BaseModel):
-    id: str; status: MissionStatus; revision: int; vehicle: VehicleKind; battery_pct: int
-    plan: MissionPlan | None; plan_hash: str | None
-    explanation: str; issues: list[ValidationIssue]; stats: PlanStats | None
-    path_preview: list[XYZ]; repair_attempts: int; max_repairs: int
-    can_repair: bool; can_confirm: bool; confirm_expires_at: datetime | None
+    id: str
+    status: MissionStatus
+    revision: int
+    vehicle: VehicleKind
+    battery_pct: int
+    plan: MissionPlan | None
+    plan_hash: str | None
+    explanation: str
+    issues: list[ValidationIssue]
+    stats: PlanStats | None
+    path_preview: list[XYZ]
+    repair_attempts: int
+    max_repairs: int
+    can_repair: bool
+    can_confirm: bool
+    confirm_expires_at: datetime | None
+
 
 class ChatResponse(BaseModel):
     conversation_id: str
@@ -1184,15 +1414,27 @@ class ChatResponse(BaseModel):
     assistant_message: str
     mission: MissionView | None
 
+
 class ConfirmRequest(BaseModel):
     plan_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
+
 class RunView(BaseModel):
-    id: str; mission_id: str; status: Literal["executed", "aborted"]
-    frames: list[Frame]; photos: list[PhotoEvent]; final_state: FinalState
+    id: str
+    mission_id: str
+    status: Literal["executed", "aborted"]
+    frames: list[Frame]
+    photos: list[PhotoEvent]
+    final_state: FinalState
+
 
 class HealthView(BaseModel):
-    status: Literal["ok"]; provider: str; model: str; site: str; version: str; instance: str
+    status: Literal["ok"]
+    provider: str
+    model: str
+    site: str
+    version: str
+    instance: str
 ```
 
 **Request guard** (`security.py`). This is pure ASGI middleware that runs before routing, so a rejected request never reaches a provider.
@@ -1230,9 +1472,13 @@ Response headers on every response:
 **`main.py`:**
 
 ```python
-def create_app(settings: AppSettings | None = None, *, provider: LLMProvider | None = None,
-               clock: Callable[[], datetime] | None = None,
-               id_factory: Callable[[], str] | None = None) -> FastAPI: ...
+def create_app(
+    settings: AppSettings | None = None,
+    *,
+    provider: LLMProvider | None = None,
+    clock: Callable[[], datetime] | None = None,
+    id_factory: Callable[[], str] | None = None,
+) -> FastAPI: ...
 ```
 
 The lifespan does the following, in order:

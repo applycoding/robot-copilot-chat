@@ -96,7 +96,10 @@ async def _json_error(send: Send, status: int, code: str, msg: str) -> None:
         {
             "type": "http.response.start",
             "status": status,
-            "headers": [(b"content-type", b"application/json")],
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
         }
     )
-    await send({"type": "http.response.end", "body": body})
+    await send({"type": "http.response.body", "body": body, "more_body": False})

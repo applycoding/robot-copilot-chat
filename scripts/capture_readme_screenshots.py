@@ -28,9 +28,7 @@ def main() -> None:
             f"() => document.querySelector('{status}')?.textContent === 'invalid'"
         )
         page.click("#repair-btn")
-        page.wait_for_function(
-            f"() => document.querySelector('{status}')?.textContent === 'valid'"
-        )
+        page.wait_for_function(f"() => document.querySelector('{status}')?.textContent === 'valid'")
         page.screenshot(path=str(OUT / "02-repair.png"), full_page=True)
 
         page.click("#confirm-btn")
