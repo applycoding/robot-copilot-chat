@@ -11,7 +11,7 @@ def test_smoke_flow(page, base_url):
     page.locator('[data-testid="chat-input"]').fill("inspect the north fence")
     page.locator('[data-testid="send-btn"]').click()
     status = page.locator('[data-testid="mission-status"]')
-    expect(status).to_contain_text("valid", timeout=15_000)
+    expect(status).to_have_text("valid", timeout=15_000)
     plan_path = page.locator('[data-testid="plan-path"]')
     d_attr = plan_path.get_attribute("d") or ""
     assert len(d_attr.strip()) > 5
