@@ -57,6 +57,20 @@ def test_tutorial_files():
         assert 350 <= prose <= 600, f"{matches[0].name} prose word count {prose}"
 
 
+def test_tutorial_no_robotic_goal_filler():
+    banned = (
+        "Learning note",
+        "You are reading tutorial chapter",
+        "links harness and hygiene to validators, confirmation hashes",
+        "Skim imports at the top of the module",
+        "Scroll one screen above and below the excerpt",
+    )
+    for path in sorted(TUTORIAL.glob("*.md")):
+        text = path.read_text()
+        for phrase in banned:
+            assert phrase not in text, f"{path.name} contains banned filler: {phrase}"
+
+
 def test_tutorial_no_duplicate_sentences_across_chapters():
     seen: dict[str, str] = {}
     for path in sorted(TUTORIAL.glob("*.md")):

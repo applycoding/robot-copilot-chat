@@ -2,7 +2,19 @@
 
 ## Goal
 
-You are reading tutorial chapter 10 about plan hash CAS in robot-copilot-chat. Chapter 10 links plan hash CAS to validators, confirmation hashes, and local simulation gates. Learning note 10-1: Confirmation requires clients to POST the plan_hash shown alongside valid missions. Learning note 10-2: Orchestrator._confirm verifies mission status, hash equality, and optimistic concurrency before simulation. Learning note 10-3: Store.commit_confirmation writes runs, updates mission status, and records audit events atomically. Learning note 10-4: Wrong hashes return HTTP 409 with plan_hash_mismatch detail codes for programmatic clients. Learning note 10-5: Confirm TTL from settings retires stale missions that operators left open too long. Learning note 10-6: Double confirm attempts should fail cleanly without creating duplicate run rows. Learning note 10-7: Generation counters invalidate confirms when new chat supersedes awaiting missions. Learning note 10-8: Executed missions hide confirm buttons in the UI and freeze repair affordances. Learning note 10-9: Simulation starts only after confirmation succeeds, never directly from chat responses. Learning note 10-10: Audit trails capture operator intent even when confirmation fails due to hash drift. Learning note 10-11: Mission revisions store plan JSON snapshots used to recompute hashes for comparisons. Learning note 10-12: Browser execute flow posts confirm then initializes playback with returned frames. Learning note 10-13: CAS failures surface stale conflict codes so clients can refresh mission views. Learning note 10-14: Teaching stacks emphasize hashes because JSON pretty-printing can change without semantic edits. Learning note 10-15: Hash algorithms live in validator modules to keep confirm and simulate aligned. Learning note 10-16: Provider changes between chat and confirm should change hashes, blocking outdated confirms. Learning note 10-17: Integration tests cover wrong hash paths without needing manual UI clicking. Learning note 10-18: Portfolio discussions should mention human confirmation as authorization, not cosmetic UX.
+Confirmation is compare-and-swap on plan_hash: clients must POST the hash shown with a valid mission or the API returns 409 plan_hash_mismatch without creating a run row. Orchestrator _confirm checks mission status, generation counters, and TTL before simulate runs. This chapter ties store commits to audit events so double confirms do not duplicate execution.
+
+Confirmation requires clients to POST the plan_hash shown alongside valid missions. Orchestrator._confirm verifies mission status, hash equality, and optimistic concurrency before simulation. Store.commit_confirmation writes runs, updates mission status, and records audit events atomically.
+
+Wrong hashes return HTTP 409 with plan_hash_mismatch detail codes for programmatic clients. Confirm TTL from settings retires stale missions that operators left open too long. Double confirm attempts should fail cleanly without creating duplicate run rows.
+
+Generation counters invalidate confirms when new chat supersedes awaiting missions. Executed missions hide confirm buttons in the UI and freeze repair affordances. Simulation starts only after confirmation succeeds, never directly from chat responses.
+
+Audit trails capture operator intent even when confirmation fails due to hash drift. Mission revisions store plan JSON snapshots used to recompute hashes for comparisons. Browser execute flow posts confirm then initializes playback with returned frames.
+
+CAS failures surface stale conflict codes so clients can refresh mission views. Teaching stacks emphasize hashes because JSON pretty-printing can change without semantic edits. Hash algorithms live in validator modules to keep confirm and simulate aligned.
+
+Provider changes between chat and confirm should change hashes, blocking outdated confirms. Integration tests cover wrong hash paths without needing manual UI clicking. Portfolio discussions should mention human confirmation as authorization, not cosmetic UX.
 
 ## Files
 

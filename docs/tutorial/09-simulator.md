@@ -2,7 +2,19 @@
 
 ## Goal
 
-You are reading tutorial chapter 09 about frames and playback in robot-copilot-chat. Chapter 09 links frames and playback to validators, confirmation hashes, and local simulation gates. Learning note 09-1: simulate consumes ok ValidationReport objects and refuses tampered or unresolved inputs. Learning note 09-2: Frame generation uses ceil(duration/dt) semantics so motion does not undershoot leg endpoints. Learning note 09-3: _final_from_frames aggregates terminal pose, battery, and landed flags for playback summaries. Learning note 09-4: Photo events emit once per photo action even when multiple frames overlap the pose. Learning note 09-5: SafetyInvariantError paths mark runs aborted while retaining frames for debugging. Learning note 09-6: North Fence inspect plans produce hundreds of frames; pytest locks counts against dt choices. Learning note 09-7: Simulator revalidates keep-out and geofence along piecewise linear frame paths as a belt-and-suspenders check. Learning note 09-8: Runs stored in SQLite include frame arrays consumed by browser playback.js. Learning note 09-9: Executed status means simulation finished without invariant violations during frame checks. Learning note 09-10: plan_hash must match report hash before simulate proceeds, tying execution to confirmation. Learning note 09-11: Drone frames include altitude; rover frames pin altitude to zero throughout trajectories. Learning note 09-12: Final battery watt-hours should match resolved stats within tight floating tolerances. Learning note 09-13: Orchestrator confirm triggers simulation after successful hash validation and CAS commit. Learning note 09-14: Playback UI steps frames sequentially using timestamps derived from dt. Learning note 09-15: Tutorial operators can run simulate directly without HTTP when exploring north_fence_plan_json. Learning note 09-16: Aborted runs still return telemetry so instructors can show students what went wrong visually. Learning note 09-17: Simulation never calls providers; it only deterministically replays validated geometry. Learning note 09-18: Frame count tests guard against accidental changes to dt or speed defaults.
+Simulation consumes only ok validation reports, then emits frames for map playback and run JSON stored after confirm. Frame counts depend on ceil(duration/dt) semantics, so North Fence inspect plans produce hundreds of frames rather than a toy forty-two step guess. Final state aggregates landed flags and battery for summaries shown beside the timeline.
+
+simulate consumes ok ValidationReport objects and refuses tampered or unresolved inputs. Frame generation uses ceil(duration/dt) semantics so motion does not undershoot leg endpoints. _final_from_frames aggregates terminal pose, battery, and landed flags for playback summaries.
+
+Photo events emit once per photo action even when multiple frames overlap the pose. SafetyInvariantError paths mark runs aborted while retaining frames for debugging. North Fence inspect plans produce hundreds of frames; pytest locks counts against dt choices.
+
+Simulator revalidates keep-out and geofence along piecewise linear frame paths as a belt-and-suspenders check. Runs stored in SQLite include frame arrays consumed by browser playback.js. Executed status means simulation finished without invariant violations during frame checks.
+
+plan_hash must match report hash before simulate proceeds, tying execution to confirmation. Drone frames include altitude; rover frames pin altitude to zero throughout trajectories. Final battery watt-hours should match resolved stats within tight floating tolerances.
+
+Orchestrator confirm triggers simulation after successful hash validation and CAS commit. Playback UI steps frames sequentially using timestamps derived from dt. Tutorial operators can run simulate directly without HTTP when exploring north_fence_plan_json.
+
+Aborted runs still return telemetry so instructors can show students what went wrong visually. Simulation never calls providers; it only deterministically replays validated geometry. Frame count tests guard against accidental changes to dt or speed defaults.
 
 ## Files
 

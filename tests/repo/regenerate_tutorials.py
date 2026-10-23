@@ -7,21 +7,12 @@ import re
 from pathlib import Path
 
 from tests.repo.tutorial_ast import assert_segment_rules, extract_segment
+from tests.repo.tutorial_goal_prose import goal_for_chapter
 
 ROOT = Path(__file__).resolve().parents[2]
 TUTORIAL = ROOT / "docs/tutorial"
 CACHE = Path(__file__).with_name("tutorial_excerpt_cache.json")
 TRY_EXPECTED = Path(__file__).with_name("tutorial_try_expected.json")
-
-
-def _prose_block(chapter: str, topic: str, bullets: list[str]) -> str:
-    lines = [
-        f"You are reading tutorial chapter {chapter} about {topic} in robot-copilot-chat.",
-        f"Chapter {chapter} links {topic} to validators, confirmation hashes, and local simulation gates.",
-    ]
-    for i, bullet in enumerate(bullets, start=1):
-        lines.append(f"Learning note {chapter}-{i}: {bullet}")
-    return " ".join(lines)
 
 
 def _segment_fence(rel: str, qualname: str, text: str) -> str:
@@ -360,7 +351,7 @@ EXTRA_DEFS_PATH = Path(__file__).with_name("tutorial_chapter_defs_extra.json")
 def _render_chapter(defn: dict, cache: dict) -> str:
     fname = defn["fname"]
     segs = cache[fname]
-    goal = _prose_block(defn["fname"][:2], defn["topic"], defn["bullets"])
+    goal = goal_for_chapter(defn)
     files_md = "\n".join(f"- `{f}`" for f in defn["files"])
     walk_parts: list[str] = ["## Walkthrough", ""]
     for n, (intro, seg_idx, outro) in enumerate(defn["walkthrough"], start=1):

@@ -2,7 +2,19 @@
 
 ## Goal
 
-You are reading tutorial chapter 14 about registry wiring in robot-copilot-chat. Chapter 14 links registry wiring to validators, confirmation hashes, and local simulation gates. Learning note 14-1: build_provider inspects settings.provider enum values and constructs the matching LLMProvider implementation. Learning note 14-2: GeminiProvider configures Google GenAI clients with timeouts and retry policies from settings. Learning note 14-3: Gemini function calling uses the same tool specs as Anthropic and OpenAI adapters. Learning note 14-4: xAIProvider subclasses OpenAIProvider with a different base URL and model identifiers. Learning note 14-5: Contract tests validate HttpOptions fields without calling live Google APIs during CI. Learning note 14-6: Registry module stays tiny so adding providers requires explicit enumeration and tests. Learning note 14-7: Gemini __init__ reads API keys and model names from AppSettings SecretStr fields. Learning note 14-8: Provider names flow into audit logs and health endpoint output for operator clarity. Learning note 14-9: Fail-closed HTTP transports in tests complement socket guards used elsewhere in the suite. Learning note 14-10: Gemini retries relate to max_retries settings documented in config/app.toml comments. Learning note 14-11: xAI shares OpenAI parsing because chat completion shapes align for tool calls. Learning note 14-12: Provider construction occurs once per process inside create_app for connection reuse. Learning note 14-13: Missing Gemini keys raise SettingsError messages naming required environment variables. Learning note 14-14: Tool normalization enforces max arg bytes protecting SQLite from huge JSON blobs. Learning note 14-15: Gemini tests include function call planning fixtures with deterministic fake responses. Learning note 14-16: Students should trace registry branches when switching RCC_PROVIDER between gemini and xai. Learning note 14-17: Cloud provider chapters assume mock-first understanding from earlier tutorial sections. Learning note 14-18: Keep registry errors loud; silent fallbacks to mock would hide misconfiguration in demos.
+build_provider selects Gemini or xAI implementations from settings while reusing shared tool specs and normalize helpers. Gemini contract tests validate client configuration fields without calling live Google APIs. xAI reuses OpenAI client patterns with a different base URL and model identifiers, keeping registry growth explicit and testable.
+
+build_provider inspects settings.provider enum values and constructs the matching LLMProvider implementation. GeminiProvider configures Google GenAI clients with timeouts and retry policies from settings. Gemini function calling uses the same tool specs as Anthropic and OpenAI adapters.
+
+xAIProvider subclasses OpenAIProvider with a different base URL and model identifiers. Contract tests validate HttpOptions fields without calling live Google APIs during CI. Registry module stays tiny so adding providers requires explicit enumeration and tests.
+
+Gemini __init__ reads API keys and model names from AppSettings SecretStr fields. Provider names flow into audit logs and health endpoint output for operator clarity. Fail-closed HTTP transports in tests complement socket guards used elsewhere in the suite.
+
+Gemini retries relate to max_retries settings documented in config/app.toml comments. xAI shares OpenAI parsing because chat completion shapes align for tool calls. Provider construction occurs once per process inside create_app for connection reuse.
+
+Missing Gemini keys raise SettingsError messages naming required environment variables. Tool normalization enforces max arg bytes protecting SQLite from huge JSON blobs. Gemini tests include function call planning fixtures with deterministic fake responses.
+
+Students should trace registry branches when switching RCC_PROVIDER between gemini and xai. Cloud provider chapters assume mock-first understanding from earlier tutorial sections. Keep registry errors loud; silent fallbacks to mock would hide misconfiguration in demos.
 
 ## Files
 
