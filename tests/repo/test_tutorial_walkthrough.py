@@ -47,7 +47,7 @@ def _prose_text(text: str) -> str:
 def _sentences_8plus(text: str) -> list[str]:
     raw = _prose_text(text)
     raw = re.sub(r"<!--.*?-->", "", raw, flags=re.DOTALL)
-    parts = _SENTENCE.split(raw)
+    parts = re.split(r"[.!?]\s+|\n+", raw)
     out: list[str] = []
     for part in parts:
         words = re.findall(r"\w+", part)

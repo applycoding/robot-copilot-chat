@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import warnings
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -17,8 +15,8 @@ def bare_client() -> TestClient:
 
 
 def test_httpx_data_body_emits_deprecation_warning(bare_client: TestClient) -> None:
-    with pytest.raises(DeprecationWarning, match="content="), warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
+    """Uses pyproject.toml filterwarnings (error::DeprecationWarning), not a local filter."""
+    with pytest.raises(DeprecationWarning, match="content="):
         bare_client.post(
             "/api/chat",
             data="x",

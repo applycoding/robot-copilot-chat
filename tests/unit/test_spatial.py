@@ -30,6 +30,9 @@ def test_crossing_two_keepouts_yields_two_issue_codes(ctx):
     ko_codes = [i for i in rep.issues if i.code == IssueCode.ENTERS_KEEP_OUT]
     zones = {i.params[0][1] for i in ko_codes if i.params}
     assert zones == {"Substation", "Beehives"}
+    beehives = [i for i in ko_codes if i.params and i.params[0][1] == "Beehives"]
+    assert len(beehives) == 1
+    assert beehives[0].action_index == 2
 
 
 def test_substation_keepout_dedupes_keepout_code(ctx):
