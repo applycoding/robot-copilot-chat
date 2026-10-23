@@ -6,10 +6,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, JSONResponse
 
 from robot_copilot import __version__
 from robot_copilot.api import build_router
@@ -71,6 +72,15 @@ def create_app(
         )
 
     app.include_router(build_router(orchestrator, settings, site.name))
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        _request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        errors = [
+            {"loc": err["loc"], "msg": err["msg"], "type": err["type"]} for err in exc.errors()
+        ]
+        return JSONResponse(status_code=422, content={"detail": errors})
 
     from robot_copilot.security import RequestGuardMiddleware
 

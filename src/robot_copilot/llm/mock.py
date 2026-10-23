@@ -24,7 +24,8 @@ _NUMBER_WORDS = {
 
 
 def _canonical_place(summary: SiteSummary, raw: str) -> str:
-    norm = normalize_name(raw)
+    cleaned = raw.strip().rstrip(".")
+    norm = normalize_name(cleaned)
     for place in summary.places:
         if normalize_name(str(place.get("name", ""))) == norm:
             return str(place["name"])
@@ -93,7 +94,7 @@ class MockProvider:
             body = _inspect_place(place, alt, vehicle, request.site_summary)
             return self._wrap_plan(body, vehicle, f"Inspect {place}", rover_alt=alt)
 
-        m = re.search(r"\b(take a )?(photo|picture) of the (.+)$", text)
+        m = re.search(r"\b(take a )?(photo|picture) of (?:the )?(.+)$", text)
         if m:
             place = _canonical_place(request.site_summary, m.group(3).strip())
             body = _photo_place(place, vehicle)
@@ -114,7 +115,7 @@ class MockProvider:
                 ko_body = [{"type": "goto", "place": ko}]
             return self._wrap_plan(ko_body, vehicle, f"Fly over {ko}")
 
-        m = re.search(r"\b(fly|go|drive) to the (.+)$", raw)
+        m = re.search(r"\b(fly|go|drive) to (?:the )?(.+)$", raw)
         if m:
             rest = m.group(2).strip()
             speed = None

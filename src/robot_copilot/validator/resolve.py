@@ -335,6 +335,7 @@ def check_spatial_and_energy(
         batt_params = {
             "pct": ctx.battery_pct,
             "start_wh": round(battery_start, 1),
+            "end_wh": round(stats.battery_end_wh, 1),
             "reserve_wh": round(reserve, 1),
         }
         msg, hint = explain_issue(IssueCode.BATTERY_INSUFFICIENT, None, batt_params)
@@ -346,6 +347,7 @@ def check_spatial_and_energy(
                 params=(
                     ("pct", ctx.battery_pct),
                     ("start_wh", battery_start),
+                    ("end_wh", stats.battery_end_wh),
                     ("reserve_wh", reserve),
                 ),
                 message=msg,

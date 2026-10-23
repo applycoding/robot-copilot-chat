@@ -16,12 +16,16 @@ def test_id_factory_resumes_after_restart(tmp_path: Path):
     client1 = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(
         app1, base_url="http://localhost"
     )
-    r1 = client1.post("/api/chat", json={"message": "hello"})
+    r1 = client1.post("/api/chat", json={"message": "inspect the north fence"})
     assert r1.status_code == 200
+    mid1 = r1.json()["mission"]["id"]
+    seq1 = int(mid1[2:])
 
     app2 = create_app(settings)
     client2 = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(
         app2, base_url="http://localhost"
     )
-    r2 = client2.post("/api/chat", json={"message": "inspect the north fence"})
+    r2 = client2.post("/api/chat", json={"message": "take a photo of the barn"})
     assert r2.status_code == 200
+    mid2 = r2.json()["mission"]["id"]
+    assert int(mid2[2:]) > seq1

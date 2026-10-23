@@ -93,7 +93,8 @@ TEMPLATES: Final[dict[IssueCode, tuple[str, str]]] = {
         "Shorten the mission.",
     ),
     IssueCode.BATTERY_INSUFFICIENT: (
-        "Battery starts at {pct}% ({start_wh} Wh); the reserve alone is {reserve_wh} Wh.",
+        "Battery at {pct}% ({start_wh} Wh) cannot complete the mission; "
+        "projected end {end_wh} Wh is below the {reserve_wh} Wh reserve.",
         "Increase battery or shorten the mission.",
     ),
     IssueCode.RTH_RESERVE_VIOLATED: (
@@ -118,6 +119,8 @@ def explain_issue(
 ) -> tuple[str, str]:
     tmpl, hint_tmpl = TEMPLATES[code]
     p = dict(params)
+    if code == IssueCode.BATTERY_INSUFFICIENT and "end_wh" not in p:
+        tmpl = "Battery at {pct}% ({start_wh} Wh) is below the required {reserve_wh} Wh reserve."
     p["step"] = _step(action_index)
     if code == IssueCode.UNKNOWN_PLACE:
         sug = p.get("suggestions", "")
@@ -201,7 +204,10 @@ def describe_plan(resolved: ResolvedPlan, site: Site) -> str:
             seg = f"{seg} taking {photos} {word}"
         parts.append(seg)
     if any(a.type == "return_home" for a in plan.actions):
-        parts.append("then return home and land")
+        if plan.vehicle == "rover":
+            parts.append("then return to the dock and park")
+        else:
+            parts.append("then return home and land")
 
     head = ", ".join(parts)
     return (

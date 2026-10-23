@@ -33,13 +33,12 @@ async function api(path, options = {}) {
   return data;
 }
 
-function formatAction(a, index) {
-  const n = index + 1;
+function formatAction(a) {
   switch (a.type) {
     case "takeoff":
-      return `${n}. Take off to ${a.altitude_m} m`;
+      return `Take off to ${a.altitude_m} m`;
     case "goto": {
-      let s = `${n}. Go to `;
+      let s = "Go to ";
       if (a.place) s += a.place;
       else if (a.xy) s += `(${a.xy.x_m}, ${a.xy.y_m})`;
       else s += "target";
@@ -48,15 +47,15 @@ function formatAction(a, index) {
       return s;
     }
     case "hover":
-      return `${n}. Hover ${a.seconds} s`;
+      return `Hover ${a.seconds} s`;
     case "photo":
-      return `${n}. Photo${a.label ? `: ${a.label}` : ""}`;
+      return `Photo${a.label ? `: ${a.label}` : ""}`;
     case "land":
-      return `${n}. Land`;
+      return "Land";
     case "return_home":
-      return `${n}. Return home`;
+      return "Return home";
     default:
-      return `${n}. ${a.type}`;
+      return a.type;
   }
 }
 
@@ -70,9 +69,9 @@ function renderMission(m) {
   const steps = el("plan-steps");
   steps.textContent = "";
   if (m.plan?.actions) {
-    m.plan.actions.forEach((a, i) => {
+    m.plan.actions.forEach((a) => {
       const li = document.createElement("li");
-      li.textContent = formatAction(a, i);
+      li.textContent = formatAction(a);
       steps.appendChild(li);
     });
   }

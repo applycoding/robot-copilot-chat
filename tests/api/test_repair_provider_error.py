@@ -11,6 +11,6 @@ def test_repair_provider_error_unsticks_mission(tmp_path, fake_clock, counter_id
         mid = r.json()["mission"]["id"]
         client.post(f"/api/missions/{mid}/repair", json={})
         m = client.get(f"/api/missions/{mid}").json()
-        assert m["status"] in ("invalid", "repair_exhausted")
+        assert m["status"] == "invalid"
         r2 = client.post(f"/api/missions/{mid}/repair", json={})
         assert r2.status_code in (200, 409)

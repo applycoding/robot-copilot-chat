@@ -1,36 +1,46 @@
-# 06 Geofence, keep-outs, RTH path
+# Validator: spatial rules
 
 ## Goal
 
-Learn how **geofence, keep-outs, rth path** fits into robot-copilot-chat: the LLM proposes, the validator decides, and a human confirms before simulation.
+Work through **validator: spatial rules** with the real robot-copilot-chat sources open beside this page.
 
 ## Concepts
 
-- Typed `MissionPlan` actions are the only executable input.
-- Validation is pure, deterministic, and uses full floating-point precision.
-- The mock provider makes local development and CI possible without API keys.
-- Loopback-only exposure and request guards reduce attack surface for this demo.
+- Typed plans, validator authority, and human confirmation before simulation.
+- Chapter focus: validator: spatial rules.
 
 ## Files
 
-- `src/robot_copilot/validator/spatial.py`
-- `src/robot_copilot/validator/resolve.py`
+- `src/robot_copilot/main.py`
+- `PLAN.md` (normative behavior)
 
 ## Run it
 
 ```bash
 uv sync --locked
-# Run spatial cases including RTH_PATH_BLOCKED.
-uv run --no-sync uvicorn --factory robot_copilot.main:create_app --reload
+uv run --no-sync uvicorn --factory robot_copilot.main:create_app --host 127.0.0.1 --port 8000
 ```
+
+
+Segments between waypoints are tested against the shrunken geofence and expanded keep-outs using Shapely primitives. Issues reference the action index so repairs can target the offending step.
+
+Keep-out hits include the zone name in `ENTERS_KEEP_OUT` messages, which the UI lists verbatim.
+
+## Exercise
+
+Mutate a valid plan to route through the Substation keep-out and confirm both `ENTERS_KEEP_OUT` and `RTH_PATH_BLOCKED` can appear together.
 
 ## Checkpoint
 
-- `tests/unit/test_spatial.py`
-
+```bash
+uv run --no-sync pytest tests/unit/test_spatial.py tests/property/test_mutations.py -q
+```
 ## Exercises
 
-1. Run the checkpoint tests with `uv run --no-sync pytest <node-id> -q`.
-2. Change one config value and predict which test should fail first.
-3. Skim `PLAN.md` for the matching section and compare it to the code you opened.
+Apply the checkpoint below, then read on.
 
+## What to notice in the codebase
+
+Keep a scratch log while you work: file paths, function names, and the pytest node ids you ran. When something surprises you (for example a 409 conflict or a clipped map polyline), capture the HTTP status, mission status, and audit kinds from SQLite. The tutorial checkpoints are intentionally narrow so you can run them quickly, but the real learning comes from comparing your local traces with the farm-day golden audit sequence and the validator issue templates in `explain.py`. If you change behavior, update both tests and the matching tutorial chapter so the next reader inherits an accurate story.
+
+Re-run `scripts/build_tutorials.py` after editing cited excerpts so line numbers stay honest, or update the script literals when you move code. Pair each chapter with one manual UI action (send a chat, repair once, confirm) so you see the same statuses the API tests assert.

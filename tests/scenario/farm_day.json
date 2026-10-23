@@ -15,7 +15,7 @@
     {"action": "confirm_prior", "expect_code": "not_confirmable"},
     {"action": "repair", "mission_status": "valid"},
     {"action": "confirm", "run_status": "executed"},
-    {"action": "chat", "message": "fly to the pond at 30 m", "vehicle": "rover", "mission_status": "invalid"},
+    {"action": "chat", "message": "fly to the pond at 30 m", "vehicle": "rover", "mission_status": "invalid", "issue_codes": ["unsupported_action_for_vehicle", "altitude_on_ground_vehicle"]},
     {"action": "repair", "vehicle": "rover", "mission_status": "valid"},
     {"action": "confirm", "vehicle": "rover", "run_status": "executed"},
     {"action": "chat", "message": "patrol the perimeter four times", "battery_pct": 40, "mission_status": "invalid"},

@@ -82,6 +82,13 @@ def test_whitespace_only_message(guarded_client: TestClient):
     r = guarded_client.post("/api/chat", json={"message": "   "})
     assert r.status_code == 422
     assert guarded_client.spy.calls == 0  # type: ignore[attr-defined]
+    assert "input" not in r.text
+
+
+def test_validation_error_does_not_echo_input(guarded_client: TestClient):
+    r = guarded_client.post("/api/chat", json={"message": ""})
+    assert r.status_code == 422
+    assert "supersecret" not in r.text
 
 
 def test_chunked_body_too_large(guarded_client: TestClient):

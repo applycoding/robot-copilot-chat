@@ -351,6 +351,11 @@ class Store:
                 return False
             return True
 
+    def get_conversation_generation(self, conversation_id: str) -> int:
+        with Session(self._engine) as session:
+            conv = session.get(Conversation, conversation_id)
+            return conv.generation if conv is not None else 0
+
     def audit(self, mission_id: str | None, kind: str, detail: dict[str, Any]) -> None:
         with Session(self._engine) as session:
             self._audit(session, mission_id, kind, detail)

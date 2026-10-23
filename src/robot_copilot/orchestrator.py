@@ -351,17 +351,11 @@ class Orchestrator:
             return self._commit_repair(m, result)
 
     def _finish_repair_error(self, mission_id: str, exc: ProviderError) -> None:
-        from sqlmodel import Session
-
-        from robot_copilot.store import Conversation
-
         m = self._store.get_mission(mission_id)
         if m is None:
             return
         status = "repair_exhausted" if m.repair_attempts >= m.max_repairs else "invalid"
-        with Session(self._store._engine) as session:
-            conv = session.get(Conversation, m.conversation_id)
-            generation = conv.generation if conv else 0
+        generation = self._store.get_conversation_generation(m.conversation_id)
         self._store.commit_repair_failure(
             mission_id,
             m.revision,
@@ -377,13 +371,7 @@ class Orchestrator:
         assert conv is not None
         (self._store.recent_turns(m.conversation_id, 1))
         # get generation from conversation
-        from sqlmodel import Session
-
-        with Session(self._store._engine) as session:
-            from robot_copilot.store import Conversation
-
-            c = session.get(Conversation, m.conversation_id)
-            g = c.generation if c else 0
+        g = self._store.get_conversation_generation(m.conversation_id)
 
         plan = None
         report = None
@@ -418,6 +406,8 @@ class Orchestrator:
         events: list[tuple[str, dict[str, object]]] = [("repair_requested", {})]
         if status == "valid":
             events.append(("validated", {}))
+        elif status == "declined":
+            events.append(("declined", {}))
         elif status == "repair_exhausted":
             events.append(("repair_failed", {}))
 

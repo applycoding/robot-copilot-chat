@@ -32,21 +32,23 @@ def test_frame_count_and_endpoints(ctx):
     assert rep.resolved
     sim = simulate(rep, ctx, dt_s=0.5)
     dt = 0.5
+    idx = 0
     for leg in rep.resolved.legs:
         if leg.duration_s <= 0:
             continue
-        expected = math.ceil(leg.duration_s / dt) + 1
-        leg_frames = [
-            f
-            for f in sim.frames
-            if abs(f.x_m - leg.end.x_m) < 1e-6 or abs(f.y_m - leg.end.y_m) < 1e-6
-        ]
-        assert len(leg_frames) >= 1
-        assert expected >= 1
-        # endpoints appear in frame stream
-        assert any(
-            abs(f.x_m - leg.end.x_m) < 1e-9 and abs(f.y_m - leg.end.y_m) < 1e-9 for f in sim.frames
-        )
+        n = math.ceil(leg.duration_s / dt)
+        expected = n + 1
+        if idx > 0:
+            prev = sim.frames[idx - 1]
+            if abs(prev.x_m - leg.start.x_m) < 1e-9 and abs(prev.y_m - leg.start.y_m) < 1e-9:
+                expected -= 1
+        segment = sim.frames[idx : idx + expected]
+        assert len(segment) == expected
+        last = segment[-1]
+        assert abs(last.x_m - leg.end.x_m) < 1e-9
+        assert abs(last.y_m - leg.end.y_m) < 1e-9
+        idx += expected
+    assert idx == len(sim.frames)
     assert sim.final_state.landed and sim.final_state.at_home
     assert abs(sim.final_state.battery_wh - rep.resolved.stats.battery_end_wh) < 1e-9
 
