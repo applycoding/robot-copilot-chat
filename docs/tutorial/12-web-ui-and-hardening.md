@@ -1,20 +1,56 @@
-# 12 Web UI and request hardening
+# 12 Web UI and hardening
 
 ## Goal
 
-You will connect the Jinja shell, static JavaScript map, and API JSON to the safety middleware that runs before routes. Host and Origin checks, JSON-only POST bodies, and byte limits block casual abuse on loopback deployments. Content-Security-Policy headers complement template autoescape rules tested against XSS payloads.
-
-Templates use autoescape and pass JSON via `tojson` filters in the few places scripts need structured data. Static JavaScript never uses `innerHTML` with untrusted strings; hygiene tests grep for dangerous patterns. Request guards run outside routing so even malformed clients never reach provider semaphores or SQLite writes. Take brief notes linking each excerpt to the checkpoint test before you continue to the next chapter. Take brief notes linking each excerpt to the checkpoint test before you continue to the next chapter.
+You are reading tutorial chapter 12 about request guards and static client in robot-copilot-chat. Chapter 12 links request guards and static client to validators, confirmation hashes, and local simulation gates. Learning note 12-1: RequestGuardMiddleware wraps the ASGI app to reject bad hosts, origins, and oversize bodies early. Learning note 12-2: _read_post_body enforces maximum bytes and handles chunked uploads without draining attackers. Learning note 12-3: JSON-only POST requirements keep unexpected content types from reaching Pydantic parsers. Learning note 12-4: Allowed host lists come from settings and are enforced before route handlers execute. Learning note 12-5: Static JavaScript modules avoid inline HTML handlers; hygiene tests grep for dangerous patterns. Learning note 12-6: Chat client clears map overlays when responses are help text or lack missions. Learning note 12-7: initMap accepts path preview polylines for valid missions and empty arrays to reset state. Learning note 12-8: Templates use autoescape for HTML rendering of version strings and site titles. Learning note 12-9: CSP-minded deployments rely on static mounts instead of third-party script tags. Learning note 12-10: Chunked upload attacks return HTTP 413 quickly via early abort semantics in body readers. Learning note 12-11: Bad host headers yield 400 responses with bad_host codes for observability. Learning note 12-12: Browser fetches site geometry on load to draw fences independent of mission state. Learning note 12-13: Playback and map modules split concerns so UI changes do not entangle API security. Learning note 12-14: Confirm dialogs show explanation text produced by describe_plan for operator readability. Learning note 12-15: Repair and confirm buttons respect mission capability flags returned by orchestrator views. Learning note 12-16: API errors map to Thrown Error objects in fetch helpers with detail payloads intact. Learning note 12-17: Teaching deployments should still run behind TLS terminators enforcing real host allowlists. Learning note 12-18: Security modules stay free of business logic to keep audits focused and comprehensible.
 
 ## Files
 
 - `src/robot_copilot/security.py`
-- `src/robot_copilot/main.py`
-- `src/robot_copilot/templates/index.html`
+- `src/robot_copilot/static/app.js`
+- `tests/api/test_request_guard.py`
 
 ## Walkthrough
 
-1. `RequestGuardMiddleware` enforces host allowlists and POST content rules. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+1. _read_post_body accumulates POST payloads with strict byte caps, aborting reads once limits exceed settings.
+
+<!-- segment: src/robot_copilot/security.py _read_post_body -->
+
+```python
+async def _read_post_body(receive: Receive, max_bytes: int) -> tuple[bytes | None, Receive]:
+    """Read the full POST body (chunked or not). Returns (None, receive) when over max_bytes."""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        message = await receive()
+        if message["type"] != "http.request":
+            return None, receive
+        chunk = message.get("body", b"")
+        total += len(chunk)
+        if total > max_bytes:
+            return None, receive
+        chunks.append(chunk)
+        if not message.get("more_body"):
+            break
+
+    body = b"".join(chunks)
+    sent = False
+
+    async def replay_receive() -> Message:
+        nonlocal sent
+        if not sent:
+            sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return await receive()
+
+    return body, replay_receive
+```
+
+This function runs inside middleware before FastAPI instantiates request.form or json parsers.
+
+2. RequestGuardMiddleware.__call__ inspects scope type, host headers, methods, and content lengths for every request.
+
+<!-- segment: src/robot_copilot/security.py RequestGuardMiddleware.__call__ -->
 
 ```python
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -67,77 +103,13 @@ Templates use autoescape and pass JSON via `tojson` filters in the few places sc
             await self.app(scope, receive_for_app, send_wrapper)
         else:
             await self.app(scope, receive, send_wrapper)
-
-
-def _origin_ok(origin: str, allowed: tuple[str, ...]) -> bool:
-    return any(origin == f"http://{h}" or origin.startswith(f"http://{h}:") for h in allowed)
-
-
-async def _read_post_body(receive: Receive, max_bytes: int) -> tuple[bytes | None, Receive]:
-    """Read the full POST body (chunked or not). Returns (None, receive) when over max_bytes."""
-    chunks: list[bytes] = []
-    total = 0
-    while True:
-        message = await receive()
-        if message["type"] != "http.request":
-            return None, receive
-        chunk = message.get("body", b"")
-        total += len(chunk)
-        if total > max_bytes:
-            return None, receive
-        chunks.append(chunk)
-        if not message.get("more_body"):
-            break
-
-    body = b"".join(chunks)
-    sent = False
-
-    async def replay_receive() -> Message:
-        nonlocal sent
-        if not sent:
-            sent = True
-            return {"type": "http.request", "body": body, "more_body": False}
-        return await receive()
-
-    return body, replay_receive
 ```
 
-Rejecting non-JSON POSTs early avoids surprising 422 bodies from Starlette parsers. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
-2. CSP constants are appended on every HTTP response start. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
-
-```python
-CSP = (
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-    "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; "
-    "form-action 'none'"
-)
-```
-
-Disallowing inline script means all behavior lives in `/static` files audited by hygiene tests. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
-3. `create_app` mounts static assets and serves `index.html` without inline script. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
-
-```python
-    templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-    static_dir = Path(__file__).parent / "static"
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-    @app.get("/", response_class=HTMLResponse)
-    def index(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(
-            request,
-            "index.html",
-            {"version": __version__},
-        )
-```
-
-Passing only `version` into the template keeps the attack surface small. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
+Rejected requests never acquire database connections, preserving SQLite under abusive traffic.
 ## Try it
 
 ```bash
-RCC_DOTENV=off .venv/bin/python -c "
+RCC_DOTENV=off uv run --no-sync python -c "
 from fastapi.testclient import TestClient
 from robot_copilot.main import create_app
 from robot_copilot.settings import load_settings
@@ -149,7 +121,7 @@ print(r.status_code, r.json()['detail']['code'])
 "
 ```
 
-Expected:
+### Expected
 
 ```
 400 bad_host
@@ -157,7 +129,7 @@ Expected:
 
 ## Exercise
 
-Open devtools on `/` and verify every script tag points at `/static` rather than inline handlers. When you finish, run the checkpoint pytest node to confirm your understanding matches automated expectations.
+Verify script tags on / load modules from /static without inline onclick handlers.
 
 ## Checkpoint
 

@@ -1,20 +1,20 @@
-# 11 Repair loop and provider budget
+# 11 Repair loop
 
 ## Goal
 
-You will follow invalid missions back through the provider with structured issue briefs and attempt accounting. The orchestrator refuses repair when status is not invalid, when CAS reservation fails, or when attempts exceed `max_repairs`. Provider errors during repair still consume attempts so missions cannot spin forever.
-
-Repair messages include structured issue briefs rather than raw JSON both to save tokens and to keep prompts stable. Exhausted repair transitions missions to a terminal status so the UI can offer start-over language instead of spinning forever. Provider timeouts count as attempts because the spec treats unavailable models as consumed budget. Take brief notes linking each excerpt to the checkpoint test before you continue to the next chapter.
+You are reading tutorial chapter 11 about provider rework and attempt limits in robot-copilot-chat. Chapter 11 links provider rework and attempt limits to validators, confirmation hashes, and local simulation gates. Learning note 11-1: Repair reuses provider propose with structured issue briefs instead of raw validator JSON dumps. Learning note 11-2: Orchestrator.repair checks mission status, repair_attempts, and max_repairs before reserving attempts. Learning note 11-3: reserve_repair uses optimistic concurrency so parallel repair clicks do not double consume budget. Learning note 11-4: Provider failures during repair still increment attempts via commit_repair_failure paths. Learning note 11-5: repair_exhausted status tells the UI to stop offering repair buttons for that mission. Learning note 11-6: Mock repair can fix energy issues by adjusting plans when prompts include sufficient guidance. Learning note 11-7: Issue briefs carry codes, action indexes, and messages aligned with explain_issue templates. Learning note 11-8: Repair responses use kind plan when a new valid revision is committed successfully. Learning note 11-9: Stale repair requests return conflict codes so clients reload mission state before retrying. Learning note 11-10: max_repairs defaults come from settings and should be covered by API tests, not fictional guard suites. Learning note 11-11: Provider concurrency semaphores apply equally to repair and initial chat provider calls. Learning note 11-12: tests/unit/test_settings.py asserts provider_concurrency equals four from config/app.toml defaults. Learning note 11-13: Conversation locks serialize repair commits per thread while allowing global semaphore throttling. Learning note 11-14: Repair does not bypass confirmation; operators must still hash-confirm valid revisions. Learning note 11-15: Audit events note repair attempts for later review in teaching scenarios about autonomy governance. Learning note 11-16: Structured briefs keep token usage stable compared to embedding entire previous plans. Learning note 11-17: Invalid missions retain previous plan JSON in revisions table for diff-friendly audits. Learning note 11-18: Understanding repair aids debugging when classroom chats produce almost-correct mock missions.
 
 ## Files
 
 - `src/robot_copilot/orchestrator.py`
 - `src/robot_copilot/store.py`
-- `src/robot_copilot/llm/mock.py`
+- `tests/api/test_repair_flow.py`
 
 ## Walkthrough
 
-1. `repair` checks limits, reserves the attempt, then rebuilds `RepairContext`. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+1. Orchestrator.repair loads latest revision issues, builds RepairContext, and calls the provider under the shared semaphore.
+
+<!-- segment: src/robot_copilot/orchestrator.py Orchestrator.repair -->
 
 ```python
     async def repair(self, mission_id: str) -> ChatResponse:
@@ -65,442 +65,59 @@ Repair messages include structured issue briefs rather than raw JSON both to sav
 
         async with self._lock(m.conversation_id):
             return self._commit_repair(m, result)
+```
 
-    def _finish_repair_error(self, mission_id: str, exc: ProviderError) -> None:
-        m = self._store.get_mission(mission_id)
-        if m is None:
-            return
-        status = "repair_exhausted" if m.repair_attempts >= m.max_repairs else "invalid"
-        generation = self._store.get_conversation_generation(m.conversation_id)
-        self._store.commit_repair_failure(
-            mission_id,
-            m.revision,
-            m.repair_attempts,
-            generation,
-            status,
-            {"kind": exc.kind},
-        )
+ProviderError paths finish via commit_repair_failure so attempts are not silently lost.
 
-    def _commit_repair(self, m: Mission, result: ProviderResult) -> ChatResponse:
-        ctx = self._ctx(m.vehicle, m.battery_pct)  # type: ignore[arg-type]
-        conv = self._store.get_mission(m.id)
-        assert conv is not None
-        (self._store.recent_turns(m.conversation_id, 1))
-        # get generation from conversation
-        g = self._store.get_conversation_generation(m.conversation_id)
+2. Store.commit_repair_failure updates mission status to invalid or repair_exhausted while persisting audit metadata.
 
-        plan = None
-        report = None
-        status = "invalid"
-        if result.kind == "decline":
-            status = "declined"
-        elif result.kind == "plan":
-            plan, report = validate_raw(result.tool_args or {}, ctx)
-            status = "valid" if report.ok else "invalid"
-        elif result.kind == "malformed" or result.kind == "text":
-            status = "invalid"
+<!-- segment: src/robot_copilot/store.py Store.commit_repair_failure -->
 
-        if m.repair_attempts >= m.max_repairs and status == "invalid":
-            status = "repair_exhausted"
-
-        rev = MissionRevision(
-            id=self._store._id(),
-            mission_id=m.id,
-            revision=m.revision,
-            attempt=m.repair_attempts,
-            provider=result.provider,
-            model=result.model,
-            result_kind=result.kind,
-            plan_json=json.dumps(plan.model_dump(mode="json"))
-            if plan
-            else rev_row.plan_json
-            if (rev_row := self._store.get_latest_revision(m.id))
-            else None,
-            report_json=json.dumps(report.model_dump(mode="json")) if report else None,
-            created_at=self._clock().isoformat(),
-        )
-        events: list[tuple[str, dict[str, object]]] = [("repair_requested", {})]
-        if status == "valid":
-            events.append(("validated", {}))
-        elif status == "declined":
-            events.append(("declined", {}))
-        elif status == "repair_exhausted":
-            events.append(("repair_failed", {}))
-
-        ok = self._store.commit_repair(
-            mission_id=m.id,
-            generation=g,
-            rev=m.revision,
-            attempts=m.repair_attempts,
-            status=status,
-            plan_hash=report.plan_hash if report and report.ok else m.plan_hash,
-            validated_at=self._clock() if report and report.ok else None,
-            revision=rev,
-            events=events,
-        )
-        if not ok:
-            raise ConflictError(ConflictCode.STALE, "Mission changed; retry.")
-        assistant = describe_report(report, self._site) if report else (result.text or "")
-        m3 = self._store.get_mission(m.id)
-        saved_rev = self._store.get_latest_revision(m.id)
-        assert m3 is not None
-        view = self._build_view(m3, saved_rev, ctx, report)
-        return ChatResponse(
-            conversation_id=m.conversation_id,
-            kind="plan",
-            assistant_message=assistant,
-            mission=view,
-        )
-
-    async def confirm_and_execute(self, mission_id: str, plan_hash: str) -> RunView:
-        m = self._store.get_mission(mission_id)
-        if m is None:
-            raise KeyError(mission_id)
-        async with self._lock(m.conversation_id):
-            return self._confirm(mission_id, plan_hash)
-
-    def _confirm(self, mission_id: str, phash: str) -> RunView:
-        m = self._store.get_mission(mission_id)
-        if m is None:
-            raise KeyError(mission_id)
-        if m.status != "valid":
-            self._store.audit(mission_id, "confirm_rejected", {"reason": "not_confirmable"})
-            raise ConflictError(ConflictCode.NOT_CONFIRMABLE, "Mission cannot be confirmed.")
-        if m.plan_hash != phash:
-            self._store.audit(mission_id, "confirm_rejected", {"reason": "hash"})
-            raise ConflictError(ConflictCode.PLAN_HASH_MISMATCH, "Plan hash does not match.")
-        if m.validated_at is None:
-            raise ConflictError(ConflictCode.NOT_CONFIRMABLE, "Mission cannot be confirmed.")
-        validated = datetime.fromisoformat(m.validated_at)
-        if self._clock() - validated > timedelta(seconds=self._settings.confirm_ttl_s):
-            self._store.audit(mission_id, "confirm_rejected", {"reason": "expired"})
-            raise ConflictError(ConflictCode.CONFIRMATION_EXPIRED, "Confirmation window expired.")
-
-        rev = self._store.get_latest_revision(mission_id)
-        if rev is None or not rev.plan_json:
-            raise ConflictError(ConflictCode.REVALIDATION_FAILED, "Stored plan missing.")
-        plan = MissionPlan.model_validate_json(rev.plan_json)
-        ctx = self._ctx(m.vehicle, m.battery_pct)  # type: ignore[arg-type]
-        report = validate(plan, ctx)
-        if not report.ok or report.plan_hash != phash:
-            self._store.audit(mission_id, "confirm_rejected", {"reason": "revalidation"})
-            raise ConflictError(ConflictCode.REVALIDATION_FAILED, "Plan no longer validates.")
-
-        sim = simulate(report, ctx)
-        run = Run(
-            id=self._store._id(),
-            mission_id=mission_id,
-            plan_hash=phash,
-            status=sim.status,
-            frames_json=json.dumps([f.model_dump(mode="json") for f in sim.frames]),
-            photos_json=json.dumps([p.model_dump(mode="json") for p in sim.photos]),
-            final_state_json=json.dumps(sim.final_state.model_dump(mode="json")),
-            created_at=self._clock().isoformat(),
-        )
-        ttl_cutoff = self._clock() - timedelta(seconds=self._settings.confirm_ttl_s)
-        run_id = run.id
-        ok = self._store.commit_confirmation(
-            mission_id,
-            m.revision,
-            phash,
-            ttl_cutoff,
-            run,
-            [("confirmed", {}), (sim.status, {})],
-        )
-        if not ok:
-            raise ConflictError(ConflictCode.NOT_CONFIRMABLE, "Mission cannot be confirmed.")
-        return RunView(
-            id=run_id,
-            mission_id=mission_id,
-            status=sim.status,
-            frames=list(sim.frames),
-            photos=list(sim.photos),
-            final_state=sim.final_state,
-        )
-
-    def get_mission(self, mission_id: str) -> MissionView:
-        m = self._store.get_mission(mission_id)
-        if m is None:
-            raise KeyError(mission_id)
-        rev = self._store.get_latest_revision(mission_id)
-        ctx = self._ctx(m.vehicle, m.battery_pct)  # type: ignore[arg-type]
-        return self._build_view(m, rev, ctx)
-
-    def get_commands(self, mission_id: str) -> list[Leg]:
-        m = self._store.get_mission(mission_id)
-        if m is None:
-            raise KeyError(mission_id)
-        if m.status not in ("valid", "executed"):
-            raise ConflictError(ConflictCode.NO_VALID_PLAN, "No valid plan available.")
-        rev = self._store.get_latest_revision(mission_id)
-        if not rev or not rev.plan_json:
-            raise ConflictError(ConflictCode.REVALIDATION_FAILED, "Plan missing.")
-        plan = MissionPlan.model_validate_json(rev.plan_json)
-        ctx = self._ctx(m.vehicle, m.battery_pct)  # type: ignore[arg-type]
-        report = validate(plan, ctx)
-        if not report.ok or not report.resolved:
-            raise ConflictError(ConflictCode.REVALIDATION_FAILED, "Plan no longer validates.")
-        if m.plan_hash and report.plan_hash != m.plan_hash:
-            raise ConflictError(ConflictCode.REVALIDATION_FAILED, "Plan hash changed.")
-        return list(report.resolved.legs)
-
-    def get_run(self, run_id: str) -> RunView:
-        run = self._store.get_run(run_id)
-        if run is None:
-            raise KeyError(run_id)
-        from robot_copilot.sim.telemetry import FinalState, Frame, PhotoEvent
-
-        return RunView(
-            id=run.id,
-            mission_id=run.mission_id,
-            status=run.status,
-            frames=[Frame.model_validate(x) for x in json.loads(run.frames_json)],
-            photos=[PhotoEvent.model_validate(x) for x in json.loads(run.photos_json)],
-            final_state=FinalState.model_validate(json.loads(run.final_state_json)),
-        )
-
-    def _build_view(
+```python
+    def commit_repair_failure(
         self,
-        m: Mission,
-        rev: MissionRevision | None,
-        ctx: ValidationContext,
-        report: ValidationReport | None = None,
-    ) -> MissionView:
-        plan = None
-        issues: list[ValidationIssue] = []
-        stats = None
-        path_preview: list[XYZ] = []
-        if rev and rev.plan_json:
-            try:
-                plan = MissionPlan.model_validate_json(rev.plan_json)
-            except Exception:
-                plan = None
-        if report is None and rev and rev.report_json:
-            from robot_copilot.validator.issues import ValidationReport
-
-            report = ValidationReport.model_validate_json(rev.report_json)
-        if report:
-            issues = list(report.issues)
-            if report.resolved:
-                stats = report.resolved.stats
-                path_preview = [leg.end for leg in report.resolved.legs if leg.kind == "move"]
-        explanation = describe_report(report, self._site) if report else ""
-        can_repair = m.status == "invalid" and m.repair_attempts < m.max_repairs
-        expires = None
-        can_confirm = m.status == "valid"
-        if m.validated_at and can_confirm:
-            expires = datetime.fromisoformat(m.validated_at) + timedelta(
-                seconds=self._settings.confirm_ttl_s
-            )
-        return MissionView(
-            id=m.id,
-            status=MissionStatus(m.status),
-            revision=m.revision,
-            vehicle=m.vehicle,  # type: ignore[arg-type]
-            battery_pct=m.battery_pct,
-            plan=plan,
-            plan_hash=m.plan_hash,
-            explanation=explanation,
-            issues=issues,
-            stats=stats,
-            path_preview=path_preview,
-            repair_attempts=m.repair_attempts,
-            max_repairs=m.max_repairs,
-            can_repair=can_repair,
-            can_confirm=can_confirm,
-            confirm_expires_at=expires,
-        )
-```
-
-Returning `STALE` on reservation failure tells the UI to refresh mission JSON before retrying. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
-2. Mock repair paths adjust altitude and other fields based on issue codes. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
-
-```python
-    def _repair(self, request: ProposalRequest) -> ProviderResult:
-        repair = request.repair
-        assert repair is not None
-        issues = repair.issues
-        for iss in issues:
-            if iss.code in {c.value for c in _DECLINE_ISSUES}:
-                return normalize(
-                    [
-                        (
-                            DECLINE_TOOL,
-                            {
-                                "reason": f"Cannot repair: {iss.message}",
-                                "category": "unsupported",
-                            },
-                        )
-                    ],
-                    None,
-                    "complete",
-                    provider=self.name,
-                    model=self.model,
-                    max_args_bytes=32768,
-                )
-
-        plan_dict = copy.deepcopy(repair.previous_plan or {})
-        raw_actions = plan_dict.get("actions")
-        actions: list[dict[str, object]] = (
-            list(raw_actions) if isinstance(raw_actions, list) else []
-        )
-        attempt = repair.attempt
-
-        for iss in issues:
-            code = iss.code
-            idx = iss.action_index
-            if code in (IssueCode.ALTITUDE_LOW.value, IssueCode.ALTITUDE_HIGH.value):
-                if idx is not None and idx < len(actions):
-                    a = actions[idx]
-                    if a.get("type") == "takeoff" or (
-                        a.get("type") == "goto" and "altitude_m" in a
-                    ):
-                        a["altitude_m"] = 120.0 if code == IssueCode.ALTITUDE_HIGH.value else 10.0
-            elif code == IssueCode.SPEED_HIGH.value and idx is not None:
-                actions[idx]["speed_mps"] = 15.0
-            elif code == IssueCode.HOVER_TOO_LONG.value and idx is not None:
-                actions[idx]["seconds"] = 120.0
-            elif code in (
-                IssueCode.UNSUPPORTED_ACTION_FOR_VEHICLE.value,
-                IssueCode.ALTITUDE_ON_GROUND_VEHICLE.value,
+        mission_id: str,
+        rev: int,
+        attempts: int,
+        generation: int,
+        status: str,
+        detail: dict[str, Any],
+    ) -> bool:
+        with Session(self._engine) as session:
+            m = session.get(Mission, mission_id)
+            conv = session.get(Conversation, m.conversation_id if m else "")
+            if (
+                m is None
+                or conv is None
+                or conv.generation != generation
+                or m.status != "repairing"
+                or m.revision != rev
+                or m.repair_attempts != attempts
             ):
-                actions = [a for a in actions if a.get("type") not in ("takeoff", "land")]
-                for a in actions:
-                    if a.get("type") == "goto":
-                        a.pop("altitude_m", None)
-            elif code == IssueCode.MUST_END_AT_HOME.value:
-                if not actions or actions[-1].get("type") != "return_home":
-                    actions.append({"type": "return_home"})
-            elif code in (
-                IssueCode.BATTERY_INSUFFICIENT.value,
-                IssueCode.RTH_RESERVE_VIOLATED.value,
-                IssueCode.TOO_LONG_DISTANCE.value,
-                IssueCode.TOO_LONG_DURATION.value,
-            ):
-                loops = _patrol_loops(normalize_name(request.user_message))
-                if loops is not None:
-                    new_loops = max(1, loops // (2**attempt))
-                    actions = _patrol_wrapped(new_loops, request.vehicle)
-
-        plan_dict["actions"] = actions
-        return normalize(
-            [(PROPOSE_TOOL, plan_dict)],
-            render_repair_message(repair),
-            "complete",
-            provider=self.name,
-            model=self.model,
-            max_args_bytes=32768,
-        )
-
-
-def _patrol_loops(text: str) -> int | None:
-    m = re.search(
-        r"patrol the perimeter(?: "
-        r"(\d+|once|twice|three|four|five|six|seven|eight|nine|ten) times)?",
-        text,
-    )
-    if not m:
-        return None
-    token = m.group(1)
-    if token is None:
-        return 1
-    if token.isdigit():
-        return int(token)
-    return _NUMBER_WORDS.get(token, 1)
-
-
-def _patrol_body(loops: int) -> list[dict[str, object]]:
-    body: list[dict[str, object]] = []
-    for _ in range(loops):
-        for idx in range(5):
-            body.append({"type": "goto", "place": "Perimeter", "point_index": idx})
-    return body
-
-
-def _patrol_wrapped(loops: int, vehicle: str) -> list[dict[str, object]]:
-    actions: list[dict[str, object]] = []
-    if vehicle == "drone":
-        actions.append({"type": "takeoff", "altitude_m": 30.0})
-    actions.extend(_patrol_body(loops))
-    actions.append({"type": "return_home"})
-    return actions
-
-
-def _inspect_place(
-    place: str, alt: float | None, vehicle: str, site_summary: object
-) -> list[dict[str, object]]:
-    body: list[dict[str, object]] = []
-    count = 1
-    for p in getattr(site_summary, "places", []):
-        if normalize_name(p.get("name", "")) == normalize_name(place):
-            count = p.get("point_count", 1)
-            break
-    for idx in range(count):
-        goto: dict[str, object] = {"type": "goto", "place": place, "point_index": idx}
-        if alt is not None:
-            goto["altitude_m"] = alt
-        body.append(goto)
-        if vehicle == "drone":
-            body.append({"type": "hover", "seconds": 3})
-        body.append({"type": "photo"})
-    return body
-
-
-def _photo_place(place: str, vehicle: str) -> list[dict[str, object]]:
-    body: list[dict[str, object]] = [{"type": "goto", "place": place}]
-    if vehicle == "drone":
-        body.append({"type": "hover", "seconds": 5.0})
-    body.append({"type": "photo"})
-    return body
-
-
-def _fly_keepout(name: str, request: ProposalRequest) -> list[dict[str, object]] | None:
-    summary = request.site_summary
-    keep_outs = getattr(summary, "keep_outs", [])
-    for ko in keep_outs:
-        if normalize_name(ko) == normalize_name(name) or normalize_name(name) in normalize_name(ko):
-            return [{"type": "goto", "xy": {"x_m": -140.0, "y_m": 120.0}}]
-    return None
+                return False
+            m.status = status
+            session.add(m)
+            self._audit(session, mission_id, "provider_error", detail)
+            session.commit()
+            return True
 ```
 
-Deterministic repair makes farm-day golden tests reproducible without cloud keys. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
-3. Chat uses the same provider semaphore as repair to cap concurrent SDK calls. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
-
-```python
-        self._locks: dict[str, asyncio.Lock] = {}
-        self._sem = asyncio.Semaphore(settings.provider_concurrency)
-```
-
-Semaphore sizing comes from `config/app.toml` and is asserted in guard tests. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
+Generation counters ensure repairs do not resurrect missions from superseded conversations.
 ## Try it
 
 ```bash
-RCC_DOTENV=off .venv/bin/python -c "
-from fastapi.testclient import TestClient
-from robot_copilot.main import create_app
-from robot_copilot.settings import load_settings
-from tests.helpers import default_settings_env
-s = load_settings(env=default_settings_env(), dotenv_enabled=False)
-c = TestClient(create_app(s), base_url='http://localhost')
-chat = c.post('/api/chat', json={'message':'inspect north fence at 30m','vehicle':'drone','battery_pct':15}).json()
-mid = chat['mission']['id']
-r = c.post(f'/api/missions/{mid}/repair').json()
-print(r['kind'], r['mission']['status'])
-"
+RCC_DOTENV=off uv run --no-sync pytest tests/unit/test_settings.py::test_mock_default -q --no-header
 ```
 
-Expected after mock repair:
+### Expected
 
 ```
-plan valid
+1 passed
 ```
 
 ## Exercise
 
-Set `max_repairs` to zero on a mission row in a test database and confirm repair returns HTTP 409 with `repair_limit`. When you finish, run the checkpoint pytest node to confirm your understanding matches automated expectations.
+Read provider_concurrency in config/app.toml and confirm tests/unit/test_settings.py pins it to four.
 
 ## Checkpoint
 

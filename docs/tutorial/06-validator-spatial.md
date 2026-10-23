@@ -1,57 +1,20 @@
-# 06 Spatial validator and RTH paths
+# 06 Spatial validation
 
 ## Goal
 
-You will see how resolved legs are tested against the inset geofence and buffered keep-outs. Segment helpers treat zero-length moves as point checks and longer moves as line strings. Return-to-home simulation adds a straight segment to home and rejects plans when that path leaves the fence or crosses a keep-out.
-
-Resolution expands named places to coordinates before spatial checks run, so unknown places fail in structure or resolve stages before Shapely sees segments. Concave geofences rely on polygon coverage rather than bounding boxes, which matches irregular farm shapes in the demo TOML. Map previews use the same geometry objects, so a keep-out highlighted in the UI is exactly what blocked validation.
+You are reading tutorial chapter 06 about geofence and keep-out checks in robot-copilot-chat. Chapter 06 links geofence and keep-out checks to validators, confirmation hashes, and local simulation gates. Learning note 06-1: Spatial validation expands places into coordinates, then tests each leg against fences and keep-outs. Learning note 06-2: segment_hits_keepout samples segment geometry with margins inherited from site configuration. Learning note 06-3: rth_segment_blocked verifies return-home paths do not pierce forbidden volumes after mission legs. Learning note 06-4: Altitude ceilings compare action altitudes against drone profile limits with clear issue params. Learning note 06-5: Geofence violations use polygon inclusion tests with margin buffers similar to keep-out handling. Learning note 06-6: Unknown places fail before spatial math when resolution cannot map a label to coordinates. Learning note 06-7: Fly over substation mock plans intentionally enter keep-outs to produce teaching-friendly invalid missions. Learning note 06-8: Spatial codes include enters_keep_out and rth_path_blocked often appearing together for flyover prompts. Learning note 06-9: Path places generate multiple legs; each segment is tested independently for cumulative violations. Learning note 06-10: Rover plans use zero altitude throughout spatial checks, reflecting ground navigation assumptions. Learning note 06-11: Spatial results feed path_preview polylines displayed in the browser map for valid missions. Learning note 06-12: Issue messages include distances and thresholds formatted later by explain_issue templates. Learning note 06-13: Spatial validation never mutates plans; resolved plans come from earlier resolution passes. Learning note 06-14: Keep-out names normalize identically to place names, keeping mock and validator behavior aligned. Learning note 06-15: Tutorial chat phrase fly over the substation should yield invalid status with spatial codes listed. Learning note 06-16: Regression tests lock substation scenarios so README warnings stay truthful after edits. Learning note 06-17: Spatial failures block confirmation because hashes would otherwise authorize unsafe motion. Learning note 06-18: Understanding segment tests helps you interpret map overlays versus actual forbidden regions.
 
 ## Files
 
 - `src/robot_copilot/validator/spatial.py`
-- `src/robot_copilot/validator/resolve.py`
 - `src/robot_copilot/geometry.py`
+- `tests/unit/test_spatial.py`
 
 ## Walkthrough
 
-1. `segment_outside_fence` compares both endpoints and the segment against the inset polygon. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+1. segment_hits_keepout wraps shapely intersections, returning true when a movement segment intersects buffered keep-out polygons.
 
-```python
-def segment_outside_fence(geometry: SiteGeometry, start: XYZ, end: XYZ) -> bool:
-    if start.x_m == end.x_m and start.y_m == end.y_m and start.alt_m == end.alt_m:
-        pt = Point(start.x_m, start.y_m)
-        return not geometry.fence_inset.covers(pt)
-    line = LineString([(start.x_m, start.y_m), (end.x_m, end.y_m)])
-    return not geometry.fence_inset.covers(line)
-
-
-def segment_hits_keepout(geometry: SiteGeometry, start: XYZ, end: XYZ) -> str | None:
-    if start.x_m == end.x_m and start.y_m == end.y_m:
-        pt = Point(start.x_m, start.y_m)
-        geom = pt
-    else:
-        geom = LineString([(start.x_m, start.y_m), (end.x_m, end.y_m)])
-    for name, poly in geometry.keep_outs:
-        if poly.intersects(geom):
-            return name
-    return None
-
-
-def rth_segment_blocked(
-    geometry: SiteGeometry, x: float, y: float, home: tuple[float, float]
-) -> bool:
-    hx, hy = home
-    if x == hx and y == hy:
-        return False
-    line = LineString([(x, y), (hx, hy)])
-    if not geometry.fence_inset.covers(line):
-        return True
-    return any(poly.intersects(line) for _, poly in geometry.keep_outs)
-```
-
-Using Shapely `covers` matches the portfolio spec for concave fences. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
-2. `segment_hits_keepout` returns the first keep-out name intersecting a move. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+<!-- segment: src/robot_copilot/validator/spatial.py segment_hits_keepout -->
 
 ```python
 def segment_hits_keepout(geometry: SiteGeometry, start: XYZ, end: XYZ) -> str | None:
@@ -64,23 +27,13 @@ def segment_hits_keepout(geometry: SiteGeometry, start: XYZ, end: XYZ) -> str | 
         if poly.intersects(geom):
             return name
     return None
-
-
-def rth_segment_blocked(
-    geometry: SiteGeometry, x: float, y: float, home: tuple[float, float]
-) -> bool:
-    hx, hy = home
-    if x == hx and y == hy:
-        return False
-    line = LineString([(x, y), (hx, hy)])
-    if not geometry.fence_inset.covers(line):
-        return True
-    return any(poly.intersects(line) for _, poly in geometry.keep_outs)
 ```
 
-Naming the hazard helps the mock decline path and the UI map highlight the same region. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
+Validators call this helper for each leg after places resolve to concrete coordinates.
 
-3. `rth_segment_blocked` mirrors the energy stage direct flight home check. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+2. rth_segment_blocked models return-home straight lines, catching plans that would exit through forbidden airspace during RTH.
+
+<!-- segment: src/robot_copilot/validator/spatial.py rth_segment_blocked -->
 
 ```python
 def rth_segment_blocked(
@@ -95,32 +48,32 @@ def rth_segment_blocked(
     return any(poly.intersects(line) for _, poly in geometry.keep_outs)
 ```
 
-Label this heuristic in reviews: it is demo-grade, not aviation certification. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
+Energy and spatial modules both reason about return paths, but only spatial emits rth_path_blocked issues.
 ## Try it
 
 ```bash
-RCC_DOTENV=off .venv/bin/python -c "
+RCC_DOTENV=off uv run --no-sync python -c "
 from fastapi.testclient import TestClient
 from robot_copilot.main import create_app
 from robot_copilot.settings import load_settings
 from tests.helpers import default_settings_env
 s = load_settings(env=default_settings_env(), dotenv_enabled=False)
 c = TestClient(create_app(s), base_url='http://localhost')
-r = c.post('/api/chat', json={'message':'hover over beehives','vehicle':'drone','battery_pct':80})
-print(r.json()['kind'], r.json().get('mission',{}).get('status'))
+r = c.post('/api/chat', json={'message':'fly over the substation','vehicle':'drone','battery_pct':80}).json()
+codes = [i['code'] for i in r['mission']['issues']]
+print(r['mission']['status'], codes[0], codes[1])
 "
 ```
 
-Expected:
+### Expected
 
 ```
-decline None
+invalid enters_keep_out rth_path_blocked
 ```
 
 ## Exercise
 
-Chat `fly to the substation` and record which spatial issue code appears in the validation report JSON. When you finish, run the checkpoint pytest node to confirm your understanding matches automated expectations.
+Record spatial issue codes from a fly to substation chat and compare with flyover phrasing.
 
 ## Checkpoint
 

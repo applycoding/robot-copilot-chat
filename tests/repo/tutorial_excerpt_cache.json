@@ -1,0 +1,267 @@
+{
+  "00-overview.md": [
+    {
+      "rel": "src/robot_copilot/redact.py",
+      "qualname": "redact_text",
+      "text": "def redact_text(text: str) -> str:\n    out = text\n    for secret in _secrets:\n        if secret:\n            out = out.replace(secret, \"[REDACTED]\")\n    for hdr in SENSITIVE_HEADERS:\n        pattern = re.compile(\n            rf\"({re.escape(hdr)}:\\s*)([^\\r\\n]+)\",\n            re.IGNORECASE,\n        )\n        out = pattern.sub(r\"\\1[REDACTED]\", out)\n    return out\n",
+      "lineno": 26,
+      "end_lineno": 37
+    }
+  ],
+  "01-skeleton.md": [
+    {
+      "rel": "src/robot_copilot/store.py",
+      "qualname": "bootstrap_id_factory",
+      "text": "def bootstrap_id_factory(engine: Engine) -> Callable[[], str]:\n    max_n = 0\n    with Session(engine) as session:\n        for model in (Conversation, Message, Mission, MissionRevision, Run, AuditEvent):\n            for row in session.exec(select(model)).all():\n                match = _ID_RE.match(str(getattr(row, \"id\", \"\")))\n                if match:\n                    max_n = max(max_n, int(match.group(1)))\n    counter = max_n\n\n    def gen() -> str:\n        nonlocal counter\n        counter += 1\n        return f\"id{counter:04d}\"\n\n    return gen\n",
+      "lineno": 100,
+      "end_lineno": 115
+    },
+    {
+      "rel": "src/robot_copilot/store.py",
+      "qualname": "Store.from_url",
+      "text": "    def from_url(\n        cls,\n        url: str,\n        clock: Callable[[], datetime],\n        id_factory: Callable[[], str] | None = None,\n    ) -> Store:\n        engine = create_engine(url, connect_args={\"check_same_thread\": False})\n        SQLModel.metadata.create_all(engine)\n        ids = id_factory or bootstrap_id_factory(engine)\n        return cls(engine, clock, ids)\n",
+      "lineno": 131,
+      "end_lineno": 140
+    }
+  ],
+  "02-site-config.md": [
+    {
+      "rel": "src/robot_copilot/site.py",
+      "qualname": "normalize_name",
+      "text": "def normalize_name(text: str) -> str:\n    \"\"\"Normalize free-text place labels for alias and keep-out matching.\n\n    Case folding and punctuation stripping let operators type informal names\n    while the resolver compares stable tokens.\n    \"\"\"\n    t = text.casefold()\n    t = _PUNCT_RE.sub(\" \", t)\n    t = \" \".join(t.split())\n    if t.startswith(\"the \"):\n        t = t[4:]\n    return t.strip()\n",
+      "lineno": 58,
+      "end_lineno": 69
+    },
+    {
+      "rel": "src/robot_copilot/site.py",
+      "qualname": "load_site",
+      "text": "def load_site(path: Path) -> Site:\n    with path.open(\"rb\") as f:\n        raw = tomllib.load(f)\n    site_raw = raw.get(\"site\", {})\n    keep_outs_raw = raw.get(\"keep_out\", [])\n    places_raw = raw.get(\"places\", [])\n\n    def coord(c: list[float]) -> Coord:\n        return (float(c[0]), float(c[1]))\n\n    site = Site(\n        id=str(site_raw[\"id\"]),\n        name=str(site_raw[\"name\"]),\n        home=coord(site_raw[\"home\"]),\n        geofence=tuple(coord(p) for p in site_raw[\"geofence\"]),\n        geofence_margin_m=float(site_raw.get(\"geofence_margin_m\", 0)),\n        keep_out=tuple(\n            KeepOut(\n                name=str(k[\"name\"]),\n                polygon=tuple(coord(p) for p in k[\"polygon\"]),\n                margin_m=float(k.get(\"margin_m\", 0)),\n            )\n            for k in keep_outs_raw\n        ),\n        places=tuple(\n            Place(\n                name=str(p[\"name\"]),\n                aliases=tuple(str(a) for a in p.get(\"aliases\", [])),\n                kind=p[\"kind\"],\n                points=tuple(coord(pt) for pt in p[\"points\"]),\n            )\n            for p in places_raw\n        ),\n    )\n    _validate_site(site)\n    return site\n",
+      "lineno": 72,
+      "end_lineno": 107
+    }
+  ],
+  "03-plan-schema.md": [
+    {
+      "rel": "src/robot_copilot/schemas.py",
+      "qualname": "ChatRequest",
+      "text": "class ChatRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    conversation_id: str | None = None\n    message: str = Field(min_length=1, max_length=2000)\n    vehicle: VehicleKind = \"drone\"\n    battery_pct: int = Field(default=100, ge=1, le=100)\n\n    @field_validator(\"message\")\n    @classmethod\n    def _strip_message(cls, v: str) -> str:\n        s = v.strip()\n        if not s:\n            raise ValueError(\"message must not be empty or whitespace only\")\n        return s\n",
+      "lineno": 14,
+      "end_lineno": 28
+    },
+    {
+      "rel": "src/robot_copilot/validator/__init__.py",
+      "qualname": "validate",
+      "text": "def validate(plan: MissionPlan, ctx: ValidationContext) -> ValidationReport:\n    issues = validate_structure(plan, ctx)\n    if issues:\n        issues_sorted = tuple(sorted(issues, key=issue_sort_key))\n        return ValidationReport(\n            ok=False,\n            issues=issues_sorted,\n            resolved=None,\n            plan_hash=plan_hash(plan, ctx),\n            validator_version=VALIDATOR_VERSION,\n        )\n\n    resolved = build_resolved(plan, ctx)\n    end_state = final_state_after_plan(plan, ctx)\n    issues.extend(check_spatial_and_energy(resolved, ctx, end_state))\n    issues_sorted = tuple(sorted(issues, key=issue_sort_key))\n    ok = not any(i.severity == \"error\" for i in issues_sorted)\n    return ValidationReport(\n        ok=ok,\n        issues=issues_sorted,\n        resolved=resolved if ok else None,\n        plan_hash=plan_hash(plan, ctx),\n        validator_version=VALIDATOR_VERSION,\n    )\n",
+      "lineno": 75,
+      "end_lineno": 98
+    }
+  ],
+  "04-mock-provider.md": [
+    {
+      "rel": "src/robot_copilot/llm/mock.py",
+      "qualname": "_canonical_place",
+      "text": "def _canonical_place(summary: SiteSummary, raw: str) -> str:\n    cleaned = raw.strip().rstrip(\".\")\n    norm = normalize_name(cleaned)\n    for place in summary.places:\n        if normalize_name(str(place.get(\"name\", \"\"))) == norm:\n            return str(place[\"name\"])\n        for alias in place.get(\"aliases\", []):\n            if normalize_name(str(alias)) == norm:\n                return str(place[\"name\"])\n    return raw\n",
+      "lineno": 26,
+      "end_lineno": 35
+    },
+    {
+      "rel": "src/robot_copilot/llm/mock.py",
+      "qualname": "_inspect_place",
+      "text": "def _inspect_place(\n    place: str, alt: float | None, vehicle: str, site_summary: object\n) -> list[dict[str, object]]:\n    body: list[dict[str, object]] = []\n    count = 1\n    for p in getattr(site_summary, \"places\", []):\n        if normalize_name(p.get(\"name\", \"\")) == normalize_name(place):\n            count = p.get(\"point_count\", 1)\n            break\n    for idx in range(count):\n        goto: dict[str, object] = {\"type\": \"goto\", \"place\": place, \"point_index\": idx}\n        if alt is not None:\n            goto[\"altitude_m\"] = alt\n        body.append(goto)\n        if vehicle == \"drone\":\n            body.append({\"type\": \"hover\", \"seconds\": 3})\n        body.append({\"type\": \"photo\"})\n    return body\n",
+      "lineno": 285,
+      "end_lineno": 302
+    }
+  ],
+  "05-validator-structure.md": [
+    {
+      "rel": "src/robot_copilot/validator/structure.py",
+      "qualname": "validate_structure",
+      "text": "def validate_structure(plan: MissionPlan, ctx: ValidationContext) -> list[ValidationIssue]:\n    issues: list[ValidationIssue] = []\n    veh = ctx.vehicle\n    is_drone = isinstance(veh, DroneProfile)\n\n    if plan.vehicle != veh.kind:\n        issues.append(\n            _issue(IssueCode.VEHICLE_MISMATCH, None, {\"expected\": veh.kind, \"got\": plan.vehicle})\n        )\n\n    if len(plan.actions) > veh.max_actions:\n        issues.append(\n            _issue(\n                IssueCode.TOO_MANY_ACTIONS,\n                None,\n                {\"count\": len(plan.actions), \"max\": veh.max_actions},\n            )\n        )\n\n    state = \"ground_home\" if is_drone else \"at_home\"\n    cur_alt = 0.0\n    _hx, _hy = ctx.site.home\n\n    for idx, action in enumerate(plan.actions):\n        issues.extend(_check_action_structure(action, idx, ctx, state, cur_alt, is_drone))\n        state, cur_alt = _transition(action, idx, ctx, state, cur_alt, is_drone, issues)\n\n    return issues\n",
+      "lineno": 43,
+      "end_lineno": 70
+    },
+    {
+      "rel": "src/robot_copilot/validator/structure.py",
+      "qualname": "_issue",
+      "text": "def _issue(\n    code: IssueCode,\n    action_index: int | None,\n    params: dict[str, Any],\n    message: str = \"\",\n    hint: str = \"\",\n) -> ValidationIssue:\n    from robot_copilot.validator.explain import explain_issue\n\n    msg, h = explain_issue(code, action_index, params) if not message else (message, hint)\n    return ValidationIssue(\n        code=code,\n        severity=\"error\",\n        action_index=action_index,\n        params=tuple(sorted(params.items())),\n        message=msg,\n        hint=h,\n    )\n",
+      "lineno": 23,
+      "end_lineno": 40
+    }
+  ],
+  "06-validator-spatial.md": [
+    {
+      "rel": "src/robot_copilot/validator/spatial.py",
+      "qualname": "segment_hits_keepout",
+      "text": "def segment_hits_keepout(geometry: SiteGeometry, start: XYZ, end: XYZ) -> str | None:\n    if start.x_m == end.x_m and start.y_m == end.y_m:\n        pt = Point(start.x_m, start.y_m)\n        geom = pt\n    else:\n        geom = LineString([(start.x_m, start.y_m), (end.x_m, end.y_m)])\n    for name, poly in geometry.keep_outs:\n        if poly.intersects(geom):\n            return name\n    return None\n",
+      "lineno": 17,
+      "end_lineno": 26
+    },
+    {
+      "rel": "src/robot_copilot/validator/spatial.py",
+      "qualname": "rth_segment_blocked",
+      "text": "def rth_segment_blocked(\n    geometry: SiteGeometry, x: float, y: float, home: tuple[float, float]\n) -> bool:\n    hx, hy = home\n    if x == hx and y == hy:\n        return False\n    line = LineString([(x, y), (hx, hy)])\n    if not geometry.fence_inset.covers(line):\n        return True\n    return any(poly.intersects(line) for _, poly in geometry.keep_outs)\n",
+      "lineno": 29,
+      "end_lineno": 38
+    }
+  ],
+  "07-validator-energy.md": [
+    {
+      "rel": "src/robot_copilot/validator/energy.py",
+      "qualname": "rth_legs",
+      "text": "def rth_legs(\n    pos: XYZ,\n    state: str,\n    veh: DroneProfile | RoverProfile,\n    home: tuple[float, float],\n) -> list[tuple[str, XYZ, XYZ, float, float, float]]:\n    \"\"\"Returns list of (kind, start, end, speed, distance, duration).\"\"\"\n    if state in (\"ground_home\", \"at_home\"):\n        return []\n    legs: list[tuple[str, XYZ, XYZ, float, float, float]] = []\n    x, y, alt = pos.x_m, pos.y_m, pos.alt_m\n    hx, hy = home\n    if isinstance(veh, DroneProfile):\n        rth_alt = max(alt, veh.rth_altitude_m)\n        if state == \"ground_away\" or alt < rth_alt:\n            target = XYZ(x_m=x, y_m=y, alt_m=rth_alt)\n            dz = abs(rth_alt - alt)\n            dur = dz / veh.vertical_speed_mps if dz > 0 else 0.0\n            legs.append((\"climb\", pos, target, veh.vertical_speed_mps, dz, dur))\n            pos = target\n            alt = rth_alt\n        dist = math.hypot(hx - x, hy - y)\n        end = XYZ(x_m=hx, y_m=hy, alt_m=alt)\n        dur = dist / veh.cruise_speed_mps if dist > 0 else 0.0\n        legs.append((\"move\", pos, end, veh.cruise_speed_mps, dist, dur))\n        pos = end\n        if alt > 0:\n            target = XYZ(x_m=hx, y_m=hy, alt_m=0.0)\n            dz = alt\n            dur = dz / veh.vertical_speed_mps\n            legs.append((\"descend\", pos, target, veh.vertical_speed_mps, dz, dur))\n    else:\n        dist = math.hypot(hx - x, hy - y)\n        end = XYZ(x_m=hx, y_m=hy, alt_m=0.0)\n        dur = dist / veh.cruise_speed_mps if dist > 0 else 0.0\n        legs.append((\"move\", pos, end, veh.cruise_speed_mps, dist, dur))\n    return legs\n",
+      "lineno": 51,
+      "end_lineno": 87
+    },
+    {
+      "rel": "src/robot_copilot/validator/energy.py",
+      "qualname": "rth_wh",
+      "text": "def rth_wh(\n    pos: XYZ, state: str, veh: DroneProfile | RoverProfile, home: tuple[float, float]\n) -> float:\n    if state in (\"ground_home\", \"at_home\"):\n        return 0.0\n    total = 0.0\n    for kind, start, end, speed, dist, _dur in rth_legs(pos, state, veh, home):\n        if kind == \"move\":\n            total += move_wh(dist, speed, veh)\n        elif kind == \"climb\" and isinstance(veh, DroneProfile):\n            total += climb_wh(end.alt_m - start.alt_m, veh)\n        elif kind == \"descend\" and isinstance(veh, DroneProfile):\n            total += descend_wh(start.alt_m - end.alt_m, veh)\n    return total\n",
+      "lineno": 90,
+      "end_lineno": 103
+    }
+  ],
+  "08-explanations.md": [
+    {
+      "rel": "src/robot_copilot/validator/explain.py",
+      "qualname": "explain_issue",
+      "text": "def explain_issue(\n    code: IssueCode,\n    action_index: int | None,\n    params: Mapping[str, object],\n) -> tuple[str, str]:\n    tmpl, hint_tmpl = TEMPLATES[code]\n    p = dict(params)\n    if code == IssueCode.BATTERY_INSUFFICIENT and \"end_wh\" not in p:\n        tmpl = \"Battery at {pct}% ({start_wh} Wh) is below the required {reserve_wh} Wh reserve.\"\n    p[\"step\"] = _step(action_index)\n    if code == IssueCode.UNKNOWN_PLACE:\n        sug = p.get(\"suggestions\", \"\")\n        p[\"suggestions\"] = f\" Did you mean {sug}?\" if sug else \"\"\n    try:\n        message = tmpl.format(**p)\n    except KeyError:\n        message = tmpl\n    try:\n        hint = hint_tmpl.format(**p)\n    except KeyError:\n        hint = hint_tmpl\n    return message, hint\n",
+      "lineno": 115,
+      "end_lineno": 136
+    },
+    {
+      "rel": "src/robot_copilot/validator/explain.py",
+      "qualname": "describe_plan",
+      "text": "def describe_plan(resolved: ResolvedPlan, site: Site) -> str:\n    plan = resolved.plan\n    stats = resolved.stats\n\n    takeoff_txt: str | None = None\n    for action in plan.actions:\n        if action.type == \"takeoff\":\n            takeoff_txt = f\"Take off to {action.altitude_m:.0f} m\"\n            break\n\n    visits = _plan_visit_segments(plan, site)\n\n    parts: list[str] = []\n    if takeoff_txt:\n        parts.append(takeoff_txt)\n    for display, pts, photos in visits:\n        verb = \"Visit\" if plan.vehicle == \"rover\" else \"visit\"\n        seg = f\"{verb} {display}\"\n        if pts > 1:\n            seg = f\"{verb} {display} ({pts} points)\"\n        if photos:\n            word = \"photo\" if photos == 1 else \"photos\"\n            seg = f\"{seg} taking {photos} {word}\"\n        parts.append(seg)\n    if any(a.type == \"return_home\" for a in plan.actions):\n        if plan.vehicle == \"rover\":\n            parts.append(\"then return to the dock and park\")\n        else:\n            parts.append(\"then return home and land\")\n\n    head = \", \".join(parts)\n    return (\n        f\"{head}. {_fmt_dist(stats.distance_m)}, {_fmt_dur(stats.duration_s)}, \"\n        f\"uses {_fmt_wh(stats.energy_wh)} of {_fmt_wh(stats.battery_start_wh)}; \"\n        f\"ends with {_fmt_wh(stats.battery_end_wh)} (reserve {_fmt_wh(stats.reserve_wh)}).\"\n    )\n",
+      "lineno": 188,
+      "end_lineno": 223
+    }
+  ],
+  "09-simulator.md": [
+    {
+      "rel": "src/robot_copilot/sim/simulator.py",
+      "qualname": "simulate",
+      "text": "def simulate(\n    report: ValidationReport,\n    ctx: ValidationContext,\n    *,\n    dt_s: float = 0.5,\n    max_frames: int = 4000,\n) -> SimResult:\n    if not report.ok or report.resolved is None or report.plan_hash is None:\n        raise NotValidatedError(\"report not validated\")\n    resolved = report.resolved\n    if report.plan_hash != plan_hash(resolved.plan, ctx):\n        raise NotValidatedError(\"plan hash mismatch\")\n\n    dt = dt_s\n    while True:\n        frames, photos = _build_frames(resolved.legs, dt, ctx)\n        if len(frames) <= max_frames:\n            break\n        dt *= 2\n\n    try:\n        _check_frames(frames, ctx)\n    except SafetyInvariantError as exc:\n        fs = _final_from_frames(frames, ctx)\n        return SimResult(\n            status=\"aborted\",\n            frames=tuple(frames),\n            photos=tuple(photos),\n            final_state=fs,\n            abort_reason=str(exc),\n        )\n\n    fs = _final_from_frames(frames, ctx)\n    return SimResult(\n        status=\"executed\",\n        frames=tuple(frames),\n        photos=tuple(photos),\n        final_state=fs,\n    )\n",
+      "lineno": 32,
+      "end_lineno": 70
+    },
+    {
+      "rel": "src/robot_copilot/sim/simulator.py",
+      "qualname": "_final_from_frames",
+      "text": "def _final_from_frames(frames: list[Frame], ctx: ValidationContext) -> FinalState:\n    if not frames:\n        hx, hy = ctx.site.home\n        return FinalState(x_m=hx, y_m=hy, alt_m=0.0, battery_wh=0.0, landed=True, at_home=True)\n    last = frames[-1]\n    hx, hy = ctx.site.home\n    at_home = math.hypot(last.x_m - hx, last.y_m - hy) <= 2.0\n    landed = last.alt_m <= 0.01\n    return FinalState(\n        x_m=last.x_m,\n        y_m=last.y_m,\n        alt_m=last.alt_m,\n        battery_wh=last.battery_wh,\n        landed=landed,\n        at_home=at_home,\n    )\n",
+      "lineno": 174,
+      "end_lineno": 189
+    }
+  ],
+  "10-confirmation.md": [
+    {
+      "rel": "src/robot_copilot/orchestrator.py",
+      "qualname": "Orchestrator._confirm",
+      "text": "    def _confirm(self, mission_id: str, phash: str) -> RunView:\n        m = self._store.get_mission(mission_id)\n        if m is None:\n            raise KeyError(mission_id)\n        if m.status != \"valid\":\n            self._store.audit(mission_id, \"confirm_rejected\", {\"reason\": \"not_confirmable\"})\n            raise ConflictError(ConflictCode.NOT_CONFIRMABLE, \"Mission cannot be confirmed.\")\n        if m.plan_hash != phash:\n            self._store.audit(mission_id, \"confirm_rejected\", {\"reason\": \"hash\"})\n            raise ConflictError(ConflictCode.PLAN_HASH_MISMATCH, \"Plan hash does not match.\")\n        if m.validated_at is None:\n            raise ConflictError(ConflictCode.NOT_CONFIRMABLE, \"Mission cannot be confirmed.\")\n        validated = datetime.fromisoformat(m.validated_at)\n        if self._clock() - validated > timedelta(seconds=self._settings.confirm_ttl_s):\n            self._store.audit(mission_id, \"confirm_rejected\", {\"reason\": \"expired\"})\n            raise ConflictError(ConflictCode.CONFIRMATION_EXPIRED, \"Confirmation window expired.\")\n\n        rev = self._store.get_latest_revision(mission_id)\n        if rev is None or not rev.plan_json:\n            raise ConflictError(ConflictCode.REVALIDATION_FAILED, \"Stored plan missing.\")\n        plan = MissionPlan.model_validate_json(rev.plan_json)\n        ctx = self._ctx(m.vehicle, m.battery_pct)  # type: ignore[arg-type]\n        report = validate(plan, ctx)\n        if not report.ok or report.plan_hash != phash:\n            self._store.audit(mission_id, \"confirm_rejected\", {\"reason\": \"revalidation\"})\n            raise ConflictError(ConflictCode.REVALIDATION_FAILED, \"Plan no longer validates.\")\n\n        sim = simulate(report, ctx)\n        run = Run(\n            id=self._store._id(),\n            mission_id=mission_id,\n            plan_hash=phash,\n            status=sim.status,\n            frames_json=json.dumps([f.model_dump(mode=\"json\") for f in sim.frames]),\n            photos_json=json.dumps([p.model_dump(mode=\"json\") for p in sim.photos]),\n            final_state_json=json.dumps(sim.final_state.model_dump(mode=\"json\")),\n            created_at=self._clock().isoformat(),\n        )\n        ttl_cutoff = self._clock() - timedelta(seconds=self._settings.confirm_ttl_s)\n        run_id = run.id\n        ok = self._store.commit_confirmation(\n            mission_id,\n            m.revision,\n            phash,\n            ttl_cutoff,\n            run,\n            [(\"confirmed\", {}), (sim.status, {})],\n        )\n        if not ok:\n            raise ConflictError(ConflictCode.NOT_CONFIRMABLE, \"Mission cannot be confirmed.\")\n        return RunView(\n            id=run_id,\n            mission_id=mission_id,\n            status=sim.status,\n            frames=list(sim.frames),\n            photos=list(sim.photos),\n            final_state=sim.final_state,\n        )\n",
+      "lineno": 446,
+      "end_lineno": 503
+    },
+    {
+      "rel": "src/robot_copilot/store.py",
+      "qualname": "Store.commit_confirmation",
+      "text": "    def commit_confirmation(\n        self,\n        mission_id: str,\n        rev: int,\n        plan_hash: str,\n        validated_not_before: datetime,\n        run: Run,\n        events: list[tuple[str, dict[str, Any]]],\n    ) -> bool:\n        with Session(self._engine) as session:\n            m = session.get(Mission, mission_id)\n            if m is None or m.status != \"valid\" or m.revision != rev or m.plan_hash != plan_hash:\n                return False\n            if m.validated_at is None:\n                return False\n            val_at = _require_aware(datetime.fromisoformat(m.validated_at))\n            if val_at < _require_aware(validated_not_before):\n                return False\n            m.status = \"executed\" if run.status == \"executed\" else \"aborted\"\n            session.add(m)\n            session.add(run)\n            for kind, detail in events:\n                self._audit(session, mission_id, kind, detail)\n            try:\n                session.commit()\n            except Exception:\n                session.rollback()\n                return False\n            return True\n",
+      "lineno": 324,
+      "end_lineno": 352
+    }
+  ],
+  "11-repair-loop.md": [
+    {
+      "rel": "src/robot_copilot/orchestrator.py",
+      "qualname": "Orchestrator.repair",
+      "text": "    async def repair(self, mission_id: str) -> ChatResponse:\n        m = self._store.get_mission(mission_id)\n        if m is None:\n            raise KeyError(mission_id)\n        if m.status == \"repair_exhausted\" or (\n            m.status == \"invalid\" and m.repair_attempts >= m.max_repairs\n        ):\n            raise ConflictError(ConflictCode.REPAIR_LIMIT, \"Repair limit reached.\")\n        if m.status != \"invalid\":\n            raise ConflictError(ConflictCode.NOT_REPAIRABLE, \"Mission is not repairable.\")\n\n        if not self._store.reserve_repair(mission_id, m.revision, m.repair_attempts):\n            raise ConflictError(ConflictCode.STALE, \"Mission changed; retry.\")\n\n        m = self._store.get_mission(mission_id)\n        assert m is not None\n        rev_row = self._store.get_latest_revision(mission_id)\n        prev_plan = json.loads(rev_row.plan_json) if rev_row and rev_row.plan_json else None\n        report = json.loads(rev_row.report_json) if rev_row and rev_row.report_json else {}\n        issues = [\n            IssueBrief(code=i[\"code\"], action_index=i.get(\"action_index\"), message=i[\"message\"])\n            for i in report.get(\"issues\", [])\n        ]\n        repair_ctx = RepairContext(\n            attempt=m.repair_attempts,\n            previous_plan=prev_plan,\n            issues=issues,\n        )\n        chat_req = ChatRequest(\n            conversation_id=m.conversation_id,\n            message=m.user_message,\n            vehicle=m.vehicle,  # type: ignore[arg-type]\n            battery_pct=m.battery_pct,\n        )\n        try:\n            result = await self._call_provider(chat_req, repair_ctx)\n        except ProviderError as exc:\n            async with self._lock(m.conversation_id):\n                self._finish_repair_error(mission_id, exc)\n            return ChatResponse(\n                conversation_id=m.conversation_id,\n                kind=\"error\",\n                assistant_message=\"The AI provider is unavailable; no plan was created.\",\n                mission=self.get_mission(mission_id),\n            )\n\n        async with self._lock(m.conversation_id):\n            return self._commit_repair(m, result)\n",
+      "lineno": 304,
+      "end_lineno": 351
+    },
+    {
+      "rel": "src/robot_copilot/store.py",
+      "qualname": "Store.commit_repair_failure",
+      "text": "    def commit_repair_failure(\n        self,\n        mission_id: str,\n        rev: int,\n        attempts: int,\n        generation: int,\n        status: str,\n        detail: dict[str, Any],\n    ) -> bool:\n        with Session(self._engine) as session:\n            m = session.get(Mission, mission_id)\n            conv = session.get(Conversation, m.conversation_id if m else \"\")\n            if (\n                m is None\n                or conv is None\n                or conv.generation != generation\n                or m.status != \"repairing\"\n                or m.revision != rev\n                or m.repair_attempts != attempts\n            ):\n                return False\n            m.status = status\n            session.add(m)\n            self._audit(session, mission_id, \"provider_error\", detail)\n            session.commit()\n            return True\n",
+      "lineno": 229,
+      "end_lineno": 254
+    }
+  ],
+  "12-web-ui-and-hardening.md": [
+    {
+      "rel": "src/robot_copilot/security.py",
+      "qualname": "_read_post_body",
+      "text": "async def _read_post_body(receive: Receive, max_bytes: int) -> tuple[bytes | None, Receive]:\n    \"\"\"Read the full POST body (chunked or not). Returns (None, receive) when over max_bytes.\"\"\"\n    chunks: list[bytes] = []\n    total = 0\n    while True:\n        message = await receive()\n        if message[\"type\"] != \"http.request\":\n            return None, receive\n        chunk = message.get(\"body\", b\"\")\n        total += len(chunk)\n        if total > max_bytes:\n            return None, receive\n        chunks.append(chunk)\n        if not message.get(\"more_body\"):\n            break\n\n    body = b\"\".join(chunks)\n    sent = False\n\n    async def replay_receive() -> Message:\n        nonlocal sent\n        if not sent:\n            sent = True\n            return {\"type\": \"http.request\", \"body\": body, \"more_body\": False}\n        return await receive()\n\n    return body, replay_receive\n",
+      "lineno": 82,
+      "end_lineno": 108
+    },
+    {
+      "rel": "src/robot_copilot/security.py",
+      "qualname": "RequestGuardMiddleware.__call__",
+      "text": "    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:\n        if scope[\"type\"] != \"http\":\n            await self.app(scope, receive, send)\n            return\n\n        headers = {k.decode().lower(): v.decode() for k, v in scope.get(\"headers\", [])}\n        host = headers.get(\"host\", \"\").split(\":\")[0]\n        if host not in self.allowed_hosts:\n            await _json_error(send, 400, \"bad_host\", \"Host not allowed.\")\n            return\n\n        method = scope.get(\"method\", \"GET\")\n        receive_for_app = receive\n        if method == \"POST\":\n            origin = headers.get(\"origin\")\n            if origin is not None and not _origin_ok(origin, self.allowed_hosts):\n                await _json_error(send, 403, \"bad_origin\", \"Origin not allowed.\")\n                return\n            ct = headers.get(\"content-type\", \"\").split(\";\")[0].strip().lower()\n            if ct != \"application/json\":\n                await _json_error(send, 415, \"unsupported_media\", \"JSON required.\")\n                return\n            cl = headers.get(\"content-length\")\n            if cl and int(cl) > self.max_body_bytes:\n                await _json_error(send, 413, \"payload_too_large\", \"Body too large.\")\n                return\n\n            body, receive_for_app = await _read_post_body(receive, self.max_body_bytes)\n            if body is None:\n                await _json_error(send, 413, \"payload_too_large\", \"Body too large.\")\n                return\n\n        async def send_wrapper(message: Message) -> None:\n            if message[\"type\"] == \"http.response.start\":\n                hdrs = list(message.get(\"headers\", []))\n                hdrs.extend(\n                    [\n                        (b\"content-security-policy\", CSP.encode()),\n                        (b\"x-content-type-options\", b\"nosniff\"),\n                        (b\"referrer-policy\", b\"no-referrer\"),\n                    ]\n                )\n                message = {**message, \"headers\": hdrs}\n            await send(message)\n\n        if method == \"POST\":\n            assert receive_for_app is not None\n            await self.app(scope, receive_for_app, send_wrapper)\n        else:\n            await self.app(scope, receive, send_wrapper)\n",
+      "lineno": 26,
+      "end_lineno": 75
+    }
+  ],
+  "13-anthropic-openai.md": [
+    {
+      "rel": "src/robot_copilot/llm/anthropic_provider.py",
+      "qualname": "AnthropicProvider.propose",
+      "text": "    async def propose(self, request: ProposalRequest) -> ProviderResult:\n        tools = [\n            {\n                \"name\": t.name,\n                \"description\": t.description,\n                \"input_schema\": t.parameters,\n            }\n            for t in tool_specs()\n        ]\n        messages = [{\"role\": m.role, \"content\": m.content} for m in request.history]\n        messages.append({\"role\": \"user\", \"content\": request.user_message})\n        try:\n            resp = await self._client.messages.create(\n                model=self.model,\n                max_tokens=self._max_output_tokens,\n                system=request.system_prompt,\n                messages=messages,\n                tools=tools,\n                tool_choice={\"type\": \"auto\", \"disable_parallel_tool_use\": True},\n            )\n        except Exception as exc:\n            raise _map_error(exc) from exc\n\n        stop = \"complete\"\n        if resp.stop_reason == \"max_tokens\":\n            stop = \"max_tokens\"\n        elif resp.stop_reason == \"refusal\":\n            stop = \"refused\"\n\n        calls: list[tuple[str, dict[str, object]]] = []\n        text_parts: list[str] = []\n        for block in resp.content:\n            if block.type == \"tool_use\":\n                calls.append((block.name, block.input))\n            elif block.type == \"text\":\n                text_parts.append(block.text)\n        text = \"\\n\".join(text_parts) if text_parts else None\n        return normalize(\n            calls,\n            text,\n            stop,  # type: ignore[arg-type]\n            provider=self.name,\n            model=self.model,\n            max_args_bytes=self._max_args,\n        )\n",
+      "lineno": 43,
+      "end_lineno": 87
+    },
+    {
+      "rel": "src/robot_copilot/llm/anthropic_provider.py",
+      "qualname": "_map_error",
+      "text": "def _map_error(exc: Exception) -> ProviderError:\n    from anthropic import APIConnectionError, APITimeoutError, AuthenticationError, RateLimitError\n\n    msg = redact_text(str(exc))\n    if isinstance(exc, AuthenticationError):\n        return ProviderError(\"auth\", msg)\n    if isinstance(exc, RateLimitError):\n        return ProviderError(\"rate_limit\", msg)\n    if isinstance(exc, APITimeoutError):\n        return ProviderError(\"timeout\", msg)\n    if isinstance(exc, APIConnectionError):\n        return ProviderError(\"unavailable\", msg)\n    status = getattr(exc, \"status_code\", None)\n    if status in (401, 403):\n        return ProviderError(\"auth\", msg)\n    if status == 429:\n        return ProviderError(\"rate_limit\", msg)\n    if status and int(status) >= 500:\n        return ProviderError(\"unavailable\", msg)\n    return ProviderError(\"protocol\", msg)\n",
+      "lineno": 90,
+      "end_lineno": 109
+    }
+  ],
+  "14-gemini-xai.md": [
+    {
+      "rel": "src/robot_copilot/llm/registry.py",
+      "qualname": "build_provider",
+      "text": "def build_provider(settings: AppSettings) -> LLMProvider:\n    if settings.provider == ProviderName.MOCK:\n        return MockProvider(settings.model)\n    if settings.provider == ProviderName.ANTHROPIC:\n        from robot_copilot.llm.anthropic_provider import AnthropicProvider\n\n        return AnthropicProvider(\n            settings.model,\n            settings.api_key,  # type: ignore[arg-type]\n            timeout_s=settings.request_timeout_s,\n            max_retries=settings.sdk_max_retries,\n            max_output_tokens=settings.max_output_tokens,\n        )\n    if settings.provider == ProviderName.OPENAI:\n        from robot_copilot.llm.openai_provider import OpenAIProvider\n\n        return OpenAIProvider(\n            settings.model,\n            settings.api_key,  # type: ignore[arg-type]\n            timeout_s=settings.request_timeout_s,\n            max_retries=settings.sdk_max_retries,\n            max_output_tokens=settings.max_output_tokens,\n        )\n    if settings.provider == ProviderName.XAI:\n        from robot_copilot.llm.xai_provider import XAIProvider\n\n        return XAIProvider(\n            settings.model,\n            settings.api_key,  # type: ignore[arg-type]\n            base_url=settings.xai_base_url,\n            timeout_s=settings.request_timeout_s,\n            max_retries=settings.sdk_max_retries,\n            max_output_tokens=settings.max_output_tokens,\n        )\n    if settings.provider == ProviderName.GEMINI:\n        from robot_copilot.llm.gemini_provider import GeminiProvider\n\n        return GeminiProvider(\n            settings.model,\n            settings.api_key,  # type: ignore[arg-type]\n            timeout_s=settings.request_timeout_s,\n            max_retries=settings.sdk_max_retries,\n            max_output_tokens=settings.max_output_tokens,\n        )\n    raise ValueError(f\"unknown provider {settings.provider}\")\n",
+      "lineno": 8,
+      "end_lineno": 52
+    },
+    {
+      "rel": "src/robot_copilot/llm/gemini_provider.py",
+      "qualname": "GeminiProvider.__init__",
+      "text": "    def __init__(\n        self,\n        model: str,\n        api_key: SecretStr,\n        *,\n        timeout_s: float,\n        max_retries: int,\n        max_output_tokens: int,\n        client: Any | None = None,\n    ) -> None:\n        self.model = model\n        self._max_output_tokens = max_output_tokens\n        self._max_args = 32768\n        if client is not None:\n            self._client = client\n        else:\n            from google import genai\n\n            self._client = genai.Client(\n                api_key=api_key.get_secret_value(),\n                http_options=genai.types.HttpOptions(\n                    timeout=int(timeout_s * 1000),\n                    retry_options=genai.types.HttpRetryOptions(attempts=1 + max_retries),\n                ),\n            )\n",
+      "lineno": 16,
+      "end_lineno": 40
+    }
+  ],
+  "15-testing-docker-ci.md": [
+    {
+      "rel": "tests/conftest.py",
+      "qualname": "scrub_env",
+      "text": "def scrub_env(env: dict[str, str]) -> dict[str, str]:\n    out = dict(env)\n    for key in list(out):\n        if key.endswith(\"_API_KEY\"):\n            out.pop(key, None)\n        if key.startswith(\"RCC_\") and key not in _KEEP_RCC:\n            out.pop(key, None)\n        if re.match(r\"^(ANTHROPIC|OPENAI|GEMINI|GOOGLE|XAI)_\", key):\n            out.pop(key, None)\n        if key.lower() in (\"http_proxy\", \"https_proxy\", \"all_proxy\", \"no_proxy\"):\n            out.pop(key, None)\n    out[\"RCC_DOTENV\"] = \"off\"\n    return out\n",
+      "lineno": 70,
+      "end_lineno": 82
+    },
+    {
+      "rel": "src/robot_copilot/orchestrator.py",
+      "qualname": "Orchestrator.__init__",
+      "text": "    def __init__(\n        self,\n        provider: LLMProvider,\n        store: Store,\n        site: Site,\n        geometry: SiteGeometry,\n        vehicles: Mapping[VehicleKind, DroneProfile | RoverProfile],\n        settings: AppSettings,\n        clock: Callable[[], datetime],\n    ) -> None:\n        self._provider = provider\n        self._store = store\n        self._site = site\n        self._geometry = geometry\n        self._vehicles = vehicles\n        self._settings = settings\n        self._clock = clock\n        self._locks: dict[str, asyncio.Lock] = {}\n        self._sem = asyncio.Semaphore(settings.provider_concurrency)\n",
+      "lineno": 51,
+      "end_lineno": 69
+    }
+  ],
+  "16-extending.md": [
+    {
+      "rel": "src/robot_copilot/tools.py",
+      "qualname": "tool_specs",
+      "text": "def tool_specs() -> list[ToolSpec]:\n    return [\n        ToolSpec(\n            name=PROPOSE_TOOL,\n            description=\"Propose a mission plan as structured actions.\",\n            parameters=inline_schema(MissionPlan),\n        ),\n        ToolSpec(\n            name=DECLINE_TOOL,\n            description=\"Decline a mission request that cannot be fulfilled safely.\",\n            parameters=inline_schema(DeclineRequest),\n        ),\n    ]\n",
+      "lineno": 61,
+      "end_lineno": 73
+    },
+    {
+      "rel": "src/robot_copilot/tools.py",
+      "qualname": "build_site_summary",
+      "text": "def build_site_summary(site: Site, vehicle: DroneProfile | RoverProfile) -> SiteSummary:\n    places = [\n        {\n            \"name\": p.name,\n            \"aliases\": list(p.aliases),\n            \"kind\": p.kind,\n            \"point_count\": len(p.points),\n        }\n        for p in site.places\n    ]\n    limits: dict[str, float] = {\n        \"max_actions\": float(vehicle.max_actions),\n        \"max_distance_m\": vehicle.max_distance_m,\n        \"max_duration_s\": vehicle.max_duration_s,\n        \"max_hover_s\": vehicle.max_hover_s,\n        \"max_speed_mps\": vehicle.max_speed_mps,\n    }\n    if isinstance(vehicle, DroneProfile):\n        limits.update(\n            {\n                \"min_altitude_m\": vehicle.min_altitude_m,\n                \"max_altitude_m\": vehicle.max_altitude_m,\n                \"default_altitude_m\": vehicle.default_altitude_m,\n            }\n        )\n    return SiteSummary(\n        site_name=site.name,\n        places=places,\n        keep_outs=[k.name for k in site.keep_out],\n        limits=limits,\n    )\n",
+      "lineno": 83,
+      "end_lineno": 113
+    }
+  ]
+}

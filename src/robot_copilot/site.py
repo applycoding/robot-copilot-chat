@@ -56,6 +56,11 @@ _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
 
 
 def normalize_name(text: str) -> str:
+    """Normalize free-text place labels for alias and keep-out matching.
+
+    Case folding and punctuation stripping let operators type informal names
+    while the resolver compares stable tokens.
+    """
     t = text.casefold()
     t = _PUNCT_RE.sub(" ", t)
     t = " ".join(t.split())

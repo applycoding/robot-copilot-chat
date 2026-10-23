@@ -8,6 +8,7 @@ def test_mock_default(scrubbed_env):
     s = load_settings(env={**scrubbed_env, **default_settings_env()}, dotenv_enabled=False)
     assert s.provider == ProviderName.MOCK
     assert s.model == "mock-1"
+    assert s.provider_concurrency == 4
 
 
 def test_missing_key(scrubbed_env):

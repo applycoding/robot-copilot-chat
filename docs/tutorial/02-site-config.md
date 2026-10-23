@@ -1,31 +1,44 @@
-# 02 Site configuration and geometry
+# 02 Site configuration and place resolution
 
 ## Goal
 
-You will load the demo farm from TOML and understand how names, polygons, and margins become validator-ready geometry. Sites are frozen Pydantic models so aliases and coordinates cannot mutate at runtime. Shapely builds an inset geofence and expanded keep-outs before any mission segment is tested, which catches bad polygons at import time instead of mid-chat.
-
-Places may be points or paths; path vertices become multiple goto legs during resolution, which is why inspect missions over North Fence look longer than a single hop to Barn. Keep-out margins are intentionally larger than the geofence inset so hover missions cannot skim hazard borders. Loading errors aggregate every problem in `SiteConfigError` so misconfigured TOML fails fast at startup rather than mid-mission.
+You are reading tutorial chapter 02 about demo farm topology in robot-copilot-chat. Chapter 02 links demo farm topology to validators, confirmation hashes, and local simulation gates. Learning note 02-1: Sites load from TOML under config/sites with geofence polygons, keep-outs, and named places. Learning note 02-2: normalize_name case-folds text, strips punctuation, and removes a leading article before comparisons. Learning note 02-3: Aliases on places let operators type informal labels while canonical names stay cartographer friendly. Learning note 02-4: load_site validates polygon orientation, margins, and place kind constraints before returning a Site dataclass. Learning note 02-5: resolve_place walks aliases after normalization so mock regex captures need not list every spelling. Learning note 02-6: Path places expose multiple vertices used by perimeter patrol mock plans and spatial energy legs. Learning note 02-7: Keep-out margins expand polygons slightly so numerical edge cases do not graze forbidden airspace. Learning note 02-8: Home coordinates anchor return-home energy calculations and simulator final state checks. Learning note 02-9: SiteGeometry builds spatial indexes consumed by segment_hits_keepout and geofence tests. Learning note 02-10: Vehicle profiles load separately from vehicles.toml and attach to ValidationContext per request. Learning note 02-11: Demo farm includes Barn, Pond, substation keep-out, and North Fence path used throughout pytest. Learning note 02-12: Site summary JSON feeds provider tools so models see counts without dumping full coordinate lists. Learning note 02-13: Changing demo_farm.toml requires consistency tests so README phrases still match validator outcomes. Learning note 02-14: Invalid polygons raise SiteLoadError with human-readable problems instead of silent Shapely failures. Learning note 02-15: Place kinds distinguish point targets from polylines, affecting inspect loops and visit copy. Learning note 02-16: Tutorial operators should treat site edits as contract changes reviewed by unit and scenario tests. Learning note 02-17: Map rendering uses the same site payload as validators, avoiding drift between UI and physics. Learning note 02-18: This chapter pairs normalization with full loader validation to show failures happen early.
 
 ## Files
 
-- `config/sites/demo_farm.toml`
 - `src/robot_copilot/site.py`
+- `config/sites/demo_farm.toml`
 - `src/robot_copilot/geometry.py`
+- `tests/unit/test_site.py`
 
 ## Walkthrough
 
-1. Name normalization in `site.py` is shared by the mock provider and fuzzy suggestions for unknown places. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+1. normalize_name is the shared tokenization step for alias tables, keep-out names, and mock place capture groups.
+
+<!-- segment: src/robot_copilot/site.py normalize_name -->
 
 ```python
 def normalize_name(text: str) -> str:
+    """Normalize free-text place labels for alias and keep-out matching.
+
+    Case folding and punctuation stripping let operators type informal names
+    while the resolver compares stable tokens.
+    """
     t = text.casefold()
     t = _PUNCT_RE.sub(" ", t)
     t = " ".join(t.split())
     if t.startswith("the "):
         t = t[4:]
     return t.strip()
+```
 
+Because every matcher uses the same function, a fix here improves chat, validation, and provider tools together.
 
+2. load_site parses TOML into typed tuples, then calls _validate_site before any mission references coordinates.
+
+<!-- segment: src/robot_copilot/site.py load_site -->
+
+```python
 def load_site(path: Path) -> Site:
     with path.open("rb") as f:
         raw = tomllib.load(f)
@@ -62,145 +75,13 @@ def load_site(path: Path) -> Site:
     )
     _validate_site(site)
     return site
-
-
-def _validate_site(site: Site) -> None:
-    from shapely.geometry import LineString, Point, Polygon
-    from shapely.validation import explain_validity
-
-    problems: list[str] = []
-
-    fence = Polygon(site.geofence)
-    if not fence.is_valid:
-        problems.append(f"geofence invalid: {explain_validity(fence)}")
-
-    try:
-        inset = fence.buffer(-site.geofence_margin_m)
-    except Exception as exc:
-        problems.append(f"geofence inset failed: {exc}")
-        raise SiteConfigError(problems) from exc
-
-    if inset.is_empty:
-        problems.append("geofence inset is empty")
-    elif inset.geom_type == "MultiPolygon":
-        problems.append("geofence inset splits into multiple parts")
-    elif inset.geom_type != "Polygon":
-        problems.append(f"geofence inset has unexpected type {inset.geom_type}")
-
-    if problems:
-        raise SiteConfigError(problems)
-
-    assert isinstance(inset, Polygon)
-    buffered_keepouts: list[tuple[str, Polygon]] = []
-    for ko in site.keep_out:
-        if ko.margin_m < 0:
-            problems.append(f"keep-out {ko.name} has negative margin")
-        poly = Polygon(ko.polygon)
-        if not poly.is_valid:
-            problems.append(f"keep-out {ko.name} invalid: {explain_validity(poly)}")
-        buffered_keepouts.append((ko.name, poly.buffer(ko.margin_m)))
-
-    names_seen: set[str] = set()
-    for place in site.places:
-        if place.kind == "point" and len(place.points) != 1:
-            problems.append(f"place {place.name} kind=point must have exactly 1 point")
-        if place.kind == "path" and len(place.points) < 2:
-            problems.append(f"place {place.name} kind=path needs at least 2 points")
-        for label in (place.name, *place.aliases):
-            norm = normalize_name(label)
-            if norm in names_seen:
-                problems.append(f"duplicate normalized name: {label}")
-            names_seen.add(norm)
-
-    home_pt = Point(site.home)
-    if not inset.covers(home_pt):
-        problems.append("home is outside the geofence inset")
-    for name, buf in buffered_keepouts:
-        if buf.intersects(home_pt):
-            problems.append(f"home intersects buffered keep-out {name}")
-
-    for place in site.places:
-        pts = list(place.points)
-        segments: list[LineString] = []
-        if place.kind == "path":
-            segments = [LineString(pts)]
-        for pt in pts:
-            p = Point(pt)
-            if not inset.covers(p):
-                problems.append(f"place {place.name} point {pt} outside geofence inset")
-            for kn, buf in buffered_keepouts:
-                if buf.intersects(p):
-                    problems.append(f"place {place.name} point {pt} intersects keep-out {kn}")
-        for seg in segments:
-            if not inset.covers(seg):
-                problems.append(f"place {place.name} path segment outside geofence inset")
-            for kn, buf in buffered_keepouts:
-                if buf.intersects(seg):
-                    problems.append(f"place {place.name} path intersects keep-out {kn}")
-
-    if problems:
-        raise SiteConfigError(problems)
-
-
-def resolve_place(site: Site, name: str) -> Place | None:
-    target = normalize_name(name)
-    for place in site.places:
-        if normalize_name(place.name) == target:
-            return place
-        for alias in place.aliases:
-            if normalize_name(alias) == target:
-                return place
-    return None
-
-
-def suggest_places(site: Site, name: str, n: int = 3) -> list[str]:
-    choices = [p.name for p in site.places]
-    target = normalize_name(name)
-    matches = difflib.get_close_matches(
-        target, [normalize_name(c) for c in choices], n=n, cutoff=0.6
-    )
-    result: list[str] = []
-    for m in matches:
-        for p in site.places:
-            if normalize_name(p.name) == m:
-                result.append(p.name)
-                break
-    return result[:n]
 ```
 
-Stripping punctuation and a leading article lets `BARN.` and `the barn` resolve to the same configured place. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
-2. `SiteGeometry.build` turns the raw fence and keep-out list into buffered polygons used by spatial checks. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
-
-```python
-    def build(cls, site: Site) -> SiteGeometry:
-        fence = Polygon(site.geofence)
-        inset = fence.buffer(-site.geofence_margin_m)
-        if inset.is_empty or inset.geom_type != "Polygon":
-            raise ValueError("invalid fence inset")
-        keep_outs = tuple(
-            (ko.name, Polygon(ko.polygon).buffer(ko.margin_m)) for ko in site.keep_out
-        )
-        return cls(fence_inset=inset, keep_outs=keep_outs)
-```
-
-Negative buffering on the geofence shrinks the flyable area, while positive buffering on keep-outs adds safety margin around hazards. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
-3. Each `Site` exposes a fingerprint used when hashing validated plans. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
-
-```python
-    def fingerprint(self) -> str:
-        payload = self.model_dump(mode="json")
-        digest = hashlib.sha256(canonical_json(payload).encode()).hexdigest()
-        return digest
-```
-
-Changing coordinates or margins in TOML invalidates stored confirmation hashes, which is intentional. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
+Early validation prevents orchestrator from accepting chats when the world description is internally inconsistent.
 ## Try it
 
 ```bash
-RCC_DOTENV=off .venv/bin/python -c "
+RCC_DOTENV=off uv run --no-sync python -c "
 from robot_copilot.site import load_site, resolve_place
 from pathlib import Path
 site = load_site(Path('config/sites/demo_farm.toml'))
@@ -208,7 +89,7 @@ print(resolve_place(site, 'the barn').name)
 "
 ```
 
-Expected:
+### Expected
 
 ```
 Barn
@@ -216,7 +97,7 @@ Barn
 
 ## Exercise
 
-Add a temporary alias on `Pond` in `demo_farm.toml`, restart the app, chat using that alias, then remove the alias. When you finish, run the checkpoint pytest node to confirm your understanding matches automated expectations.
+Add a temporary alias on Pond, chat with it, then revert and rerun site tests.
 
 ## Checkpoint
 

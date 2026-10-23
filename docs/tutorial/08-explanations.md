@@ -2,48 +2,50 @@
 
 ## Goal
 
-You will map machine issue codes to stable sentences and hints for chat, repair, and confirmation summaries. Templates live beside sorting metadata so translators could swap wording without touching geometry math. Plan descriptions compress resolved legs into a single assistant line with rounded stats for display only.
-
-Hints are short on purpose; the chat UI shows messages while repair prompts include codes and params. Decline descriptions use a separate template path so unsupported payload language reads differently from validator errors. Rounding for display happens only inside describe helpers, never inside stored reports, which keeps simulator inputs aligned with validation math.
+You are reading tutorial chapter 08 about issue templates and plan copy in robot-copilot-chat. Chapter 08 links issue templates and plan copy to validators, confirmation hashes, and local simulation gates. Learning note 08-1: explain_issue maps IssueCode values to operator sentences and short remediation hints. Learning note 08-2: Templates use Python format placeholders filled from validator param dicts per issue instance. Learning note 08-3: Step prefixes derive from action_index so multi-step plans read naturally in the UI. Learning note 08-4: describe_plan composes visit sentences, takeoff lines, and statistics into confirmation summaries. Learning note 08-5: _plan_visit_segments groups gotos and photos per place for readable visit summaries. Learning note 08-6: Distance, duration, and energy appear with consistent unit formatting helpers. Learning note 08-7: Rover copy uses dock language while drone copy mentions landing at home. Learning note 08-8: describe_report falls back to issue messages when plans are not ok, truncating long lists. Learning note 08-9: describe_decline converts provider decline tools into chat-friendly sentences. Learning note 08-10: Explanations never leak secrets; they consume already redacted issue messages only. Learning note 08-11: North Fence describe_plan tests lock phrasing used in browser confirmation dialogs. Learning note 08-12: Unknown place templates optionally append suggestion clauses when params include aliases. Learning note 08-13: Battery insufficient templates can mention ending watt-hours when params provide end_wh. Learning note 08-14: Explanation modules stay free of FastAPI imports so unit tests remain lightweight. Learning note 08-15: Orchestrator stores explanation strings on mission views returned to the browser. Learning note 08-16: Repair prompts include issue briefs distilled from the same codes templates understand. Learning note 08-17: Changing IssueCode enums requires updating templates and pytest snapshots together. Learning note 08-18: Readable copy is part of safety culture; operators should not read raw JSON in modals.
 
 ## Files
 
 - `src/robot_copilot/validator/explain.py`
 - `src/robot_copilot/validator/issues.py`
-- `src/robot_copilot/orchestrator.py`
+- `tests/unit/test_explain.py`
 
 ## Walkthrough
 
-1. The `TEMPLATES` table pairs message patterns with hints for every `IssueCode`. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+1. explain_issue selects template pairs, formats messages, and returns hint strings for UI tooltips.
+
+<!-- segment: src/robot_copilot/validator/explain.py explain_issue -->
 
 ```python
-TEMPLATES: Final[dict[IssueCode, tuple[str, str]]] = {
-    IssueCode.SCHEMA: ("Schema error at {location}: {detail}", "Fix the JSON structure."),
-    IssueCode.MALFORMED_OUTPUT: (
-        "Model output was malformed: {reason}",
-        "Try rephrasing your request.",
-    ),
-    IssueCode.VEHICLE_MISMATCH: (
-        "Plan vehicle {got} does not match session vehicle {expected}.",
-        "Regenerate the plan for the selected vehicle.",
-    ),
-    IssueCode.UNSUPPORTED_ACTION_FOR_VEHICLE: (
-        "{step}Action {action} is not supported for this vehicle.",
-        "Remove unsupported actions or switch vehicle.",
-    ),
-    IssueCode.SEQUENCE: (
-        "{step}Action is not allowed in the current flight state.",
-        "Reorder actions.",
-    ),
-    IssueCode.UNKNOWN_PLACE: (
-        "{step}Unknown place {place}.{suggestions}",
-        "Use a listed place name.",
-    ),
+def explain_issue(
+    code: IssueCode,
+    action_index: int | None,
+    params: Mapping[str, object],
+) -> tuple[str, str]:
+    tmpl, hint_tmpl = TEMPLATES[code]
+    p = dict(params)
+    if code == IssueCode.BATTERY_INSUFFICIENT and "end_wh" not in p:
+        tmpl = "Battery at {pct}% ({start_wh} Wh) is below the required {reserve_wh} Wh reserve."
+    p["step"] = _step(action_index)
+    if code == IssueCode.UNKNOWN_PLACE:
+        sug = p.get("suggestions", "")
+        p["suggestions"] = f" Did you mean {sug}?" if sug else ""
+    try:
+        message = tmpl.format(**p)
+    except KeyError:
+        message = tmpl
+    try:
+        hint = hint_tmpl.format(**p)
+    except KeyError:
+        hint = hint_tmpl
+    return message, hint
 ```
 
-Params such as `{place}` are filled from sorted issue tuples so ordering stays deterministic. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
+KeyError guards keep explanations resilient when params omit optional formatting fields.
 
-2. `describe_plan` walks resolved actions to build the North Fence style summary string. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+2. describe_plan turns resolved stats into a single paragraph suitable for confirm dialogs and audit logs.
+
+<!-- segment: src/robot_copilot/validator/explain.py describe_plan -->
 
 ```python
 def describe_plan(resolved: ResolvedPlan, site: Site) -> str:
@@ -56,35 +58,7 @@ def describe_plan(resolved: ResolvedPlan, site: Site) -> str:
             takeoff_txt = f"Take off to {action.altitude_m:.0f} m"
             break
 
-    visits: list[tuple[str, int, int]] = []
-    current_display: str | None = None
-    current_pts = 1
-    current_photos = 0
-
-    def flush() -> None:
-        nonlocal current_display, current_pts, current_photos
-        if current_display is not None:
-            visits.append((current_display, current_pts, current_photos))
-        current_display = None
-        current_photos = 0
-
-    for action in plan.actions:
-        if action.type == "goto" and action.place:
-            place = resolve_place(site, action.place)
-            display = place.name if place else action.place
-            pts = len(place.points) if place and place.kind == "path" else 1
-            if current_display is None or normalize_name(current_display) != normalize_name(
-                display
-            ):
-                flush()
-                current_display = display
-                current_pts = pts
-        elif action.type == "photo":
-            current_photos += 1
-        elif action.type == "return_home":
-            flush()
-            break
-    flush()
+    visits = _plan_visit_segments(plan, site)
 
     parts: list[str] = []
     if takeoff_txt:
@@ -110,37 +84,13 @@ def describe_plan(resolved: ResolvedPlan, site: Site) -> str:
         f"uses {_fmt_wh(stats.energy_wh)} of {_fmt_wh(stats.battery_start_wh)}; "
         f"ends with {_fmt_wh(stats.battery_end_wh)} (reserve {_fmt_wh(stats.reserve_wh)})."
     )
-
-
-def describe_report(report: ValidationReport, site: Site, max_issues: int = 20) -> str:
-    if report.ok and report.resolved:
-        return describe_plan(report.resolved, site)
-    lines = [i.message for i in report.issues[:max_issues]]
-    extra = len(report.issues) - max_issues
-    if extra > 0:
-        lines.append(f"and {extra} more")
-    return " ".join(lines)
-
-
-def describe_decline(decline: DeclineRequest) -> str:
-    return decline.reason
 ```
 
-Grouping consecutive gotos to the same place keeps photo counts readable in the chat pane. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
-3. Orchestrator imports `describe_report` when formatting validation results for the client. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
-
-```python
-from robot_copilot.validator.explain import describe_decline, describe_report
-from robot_copilot.validator.issues import XYZ, IssueCode, Leg, ValidationIssue, ValidationReport
-```
-
-Keeping formatting out of FastAPI routes prevents duplicate copy when CLI tools appear later. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
+Visit aggregation collapses repeated gotos to the same place into one readable clause.
 ## Try it
 
 ```bash
-RCC_DOTENV=off .venv/bin/python -c "
+RCC_DOTENV=off uv run --no-sync python -c "
 from robot_copilot.validator.explain import explain_issue
 from robot_copilot.validator.issues import IssueCode
 msg, hint = explain_issue(IssueCode.ALTITUDE_HIGH, 0, {'altitude_m': 120, 'max': 80})
@@ -149,7 +99,7 @@ print(hint)
 "
 ```
 
-Expected:
+### Expected
 
 ```
 Step 1: Altitude 120 m exceeds the maximum 80 m.
@@ -158,7 +108,7 @@ Try 80 m or lower.
 
 ## Exercise
 
-Add a temporary template entry for a fake issue in a branch and confirm tests fail until you remove it. When you finish, run the checkpoint pytest node to confirm your understanding matches automated expectations.
+Add a fake IssueCode template on a branch and observe pytest failures until removed.
 
 ## Checkpoint
 

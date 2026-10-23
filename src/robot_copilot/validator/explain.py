@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Final
 
-from robot_copilot.plan import DeclineRequest
+from robot_copilot.plan import DeclineRequest, MissionPlan
 from robot_copilot.site import Site, normalize_name, resolve_place
 from robot_copilot.validator.issues import (
     IssueCode,
@@ -152,16 +152,7 @@ def _fmt_wh(w: float) -> str:
     return f"{w:.1f} Wh"
 
 
-def describe_plan(resolved: ResolvedPlan, site: Site) -> str:
-    plan = resolved.plan
-    stats = resolved.stats
-
-    takeoff_txt: str | None = None
-    for action in plan.actions:
-        if action.type == "takeoff":
-            takeoff_txt = f"Take off to {action.altitude_m:.0f} m"
-            break
-
+def _plan_visit_segments(plan: MissionPlan, site: Site) -> list[tuple[str, int, int]]:
     visits: list[tuple[str, int, int]] = []
     current_display: str | None = None
     current_pts = 1
@@ -191,6 +182,20 @@ def describe_plan(resolved: ResolvedPlan, site: Site) -> str:
             flush()
             break
     flush()
+    return visits
+
+
+def describe_plan(resolved: ResolvedPlan, site: Site) -> str:
+    plan = resolved.plan
+    stats = resolved.stats
+
+    takeoff_txt: str | None = None
+    for action in plan.actions:
+        if action.type == "takeoff":
+            takeoff_txt = f"Take off to {action.altitude_m:.0f} m"
+            break
+
+    visits = _plan_visit_segments(plan, site)
 
     parts: list[str] = []
     if takeoff_txt:

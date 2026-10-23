@@ -2,7 +2,7 @@
 
 ## Goal
 
-You will learn the end-to-end safety story for robot-copilot-chat: who may propose a mission, who must validate it, and who must confirm before simulation runs. The repository is a teaching stack, not a flight-tested autopilot. Your outcome is a clear mental model you can defend in a portfolio review: typed plans, deterministic validation, human confirmation bound to a hash, and local simulation only after those gates pass.
+You are reading tutorial chapter 00 about redaction and the safety envelope in robot-copilot-chat. Chapter 00 links redaction and the safety envelope to validators, confirmation hashes, and local simulation gates. Learning note 00-1: Redaction runs before request guards so provider stack traces never echo API keys copied from dotenv files. Learning note 00-2: The mock provider is default, yet settings still load optional cloud keys for experiments you run locally. Learning note 00-3: Validators are pure functions over typed plans; they never call models or mutate SQLite rows directly. Learning note 00-4: Human confirmation binds to a SHA-256 plan hash so tampered JSON cannot execute after review. Learning note 00-5: Simulation consumes validated reports only, which prevents guessing physics from draft provider output. Learning note 00-6: Audit events record confirm, repair, and decline transitions for later forensics in teaching demos. Learning note 00-7: Static assets ship from FastAPI, while JSON APIs power the browser chat and playback widgets. Learning note 00-8: Configuration merges TOML defaults with environment overrides through a single settings loader. Learning note 00-9: Issue codes are stable enums so explanations, repairs, and UI badges stay aligned across releases. Learning note 00-10: Keep-out polygons and geofences come from site TOML consumed by spatial checks and map rendering. Learning note 00-11: Energy checks include return-home legs because battery failures often appear only on the way back. Learning note 00-12: Repair loops cap attempts so runaway provider failures cannot spam tokens during classroom sessions. Learning note 00-13: Concurrency limits on provider calls protect SQLite from thrashing when many students chat at once. Learning note 00-14: The health endpoint advertises provider name and site title so operators know which world loaded. Learning note 00-15: pytest runs with RCC_DOTENV off in docs so tutorials do not depend on your private secrets file. Learning note 00-16: Docker and CI pins appear later; this chapter only orients you to the safety ordering of components. Learning note 00-17: When chat returns help text, the UI should clear map overlays so stale paths never mislead operators. Learning note 00-18: Portfolio reviewers expect you to articulate each gate between natural language and simulated motion.
 
 ## Files
 
@@ -13,32 +13,27 @@ You will learn the end-to-end safety story for robot-copilot-chat: who may propo
 
 ## Walkthrough
 
-1. Start with secrets handling. Even mock mode may load an API key from the environment when you experiment with cloud providers, so the app configures redaction before serving traffic.
+1. Begin with `redact_text`, which scrubs configured secrets and sensitive headers from arbitrary strings.
+
+<!-- segment: src/robot_copilot/redact.py redact_text -->
 
 ```python
-def configure_redaction(api_key: SecretStr | None, extra_keys: list[str] | None = None) -> None:
-    global _secrets
-    _secrets = []
-    if api_key is not None:
-        _secrets.append(api_key.get_secret_value())
-    if extra_keys:
-        _secrets.extend(k for k in extra_keys if k)
-    _secrets = [s for s in _secrets if s]
+def redact_text(text: str) -> str:
+    out = text
+    for secret in _secrets:
+        if secret:
+            out = out.replace(secret, "[REDACTED]")
+    for hdr in SENSITIVE_HEADERS:
+        pattern = re.compile(
+            rf"({re.escape(hdr)}:\s*)([^\r\n]+)",
+            re.IGNORECASE,
+        )
+        out = pattern.sub(r"\1[REDACTED]", out)
+    return out
 ```
 
-The list is rebuilt on startup rather than appended forever, which keeps tests that rotate keys predictable. Log filters and audit serialization call `redact_text` so provider failures never echo bearer tokens.
-
-2. Open `security.py` and read `RequestGuardMiddleware`. It enforces allowed hosts, JSON-only POST bodies, origin checks, and a maximum body size before FastAPI parses JSON. Oversized chunked uploads return HTTP 413 without draining the rest of the stream, which closes the connection quickly under abuse.
-
-3. Read `config/app.toml` next to the README rules table. Note `allowed_hosts`, `max_body_bytes`, and `confirm_ttl_s`. These defaults are what pytest guards in `tests/api/test_request_guard.py` and confirmation tests. Changing a limit without updating tests is a common review failure.
-
-4. Skim `create_app` in `main.py` only far enough to see the order: load site and vehicles, open SQLite, build the orchestrator, mount static files, register routes, attach validation error handling, then wrap the app with the request guard. That ordering guarantees malformed JSON never reaches business logic and that static assets still serve for the browser UI.
-
-5. Finally, open the browser UI once and read the mock banner copy. It reminds operators that the default provider does not call external APIs. The banner is not a substitute for validation, but it sets expectations during demos.
-
+Logging hooks call this helper so bearer tokens in misconfigured clients do not reach stderr during failures.
 ## Try it
-
-From the repository root:
 
 ```bash
 RCC_DOTENV=off uv run --no-sync python -c "
@@ -52,7 +47,7 @@ print(r.status_code, r.json()['status'], r.json()['provider'], r.json()['site'])
 "
 ```
 
-Expected (provider and site come from your settings):
+### Expected
 
 ```
 200 ok mock Applycoding Demo Farm
@@ -60,7 +55,7 @@ Expected (provider and site come from your settings):
 
 ## Exercise
 
-Write three sentences in your own words: what the validator is allowed to do, what the human confirm step guarantees, and what the simulator is allowed to assume about the plan hash.
+Write three sentences: what validators may change, what confirmation guarantees, and what simulation assumes about hashes.
 
 ## Checkpoint
 

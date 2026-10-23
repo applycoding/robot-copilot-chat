@@ -1,95 +1,21 @@
-# 01 Application skeleton and routing
+# 01 Application skeleton and persistence
 
 ## Goal
 
-You will see how a single FastAPI factory assembles settings, site data, SQLite persistence, the orchestrator, templates, and API routes without hiding dependencies in globals. That composition matters because every integration test can inject a mock provider, a fixed clock, and a custom id factory while production uses real settings from disk. You will also understand why identifier generation resumes after restart when the database file survives, which Docker volumes rely on.
-
-Routing stays in `api.py` so OpenAPI models remain the public contract while the orchestrator owns business rules. When you add a new endpoint, you should extend schemas first, then call a single orchestrator method, and only then adjust templates or static assets if the UI needs new fields. The lifespan hook closes the active provider so Anthropic, OpenAI, and Gemini clients do not leak sockets during hot reload in development. Pay attention to how `RCC_ROOT` resolves config paths when you run from Docker versus a git checkout, because misconfigured roots look like mysterious 404s on static files even though Python imports succeed.
+You are reading tutorial chapter 01 about SQLite store bootstrap in robot-copilot-chat. Chapter 01 links SQLite store bootstrap to validators, confirmation hashes, and local simulation gates. Learning note 01-1: FastAPI `create_app` wires site geometry, vehicles, orchestrator, templates, and guarded routers in a fixed order. Learning note 01-2: The store encapsulates SQLModel engines, monotonic string ids, and transactional commits for chat outcomes. Learning note 01-3: bootstrap_id_factory scans existing rows so restarted dev servers continue id sequences without collisions. Learning note 01-4: Store.from_url creates tables on boot, which keeps docker-less tutorials approachable for new contributors. Learning note 01-5: Orchestrator methods never open raw SQL; they call store helpers that enforce optimistic concurrency. Learning note 01-6: Conversation generation counters let new chat supersede stale missions awaiting confirmation. Learning note 01-7: Mission revisions retain provider metadata per attempt so audits can reconstruct model provenance. Learning note 01-8: Runs are unique per mission id, preventing double execution if a browser retries confirm. Learning note 01-9: Clock injection supports deterministic created_at fields inside unit tests for id factories. Learning note 01-10: Provider registry construction happens once per process, sharing timeouts loaded from app.toml. Learning note 01-11: Lifespan hooks close provider HTTP clients cleanly when uvicorn shuts down. Learning note 01-12: OpenAPI endpoints are disabled to reduce attack surface in classroom deployments. Learning note 01-13: Validation error handler normalizes Pydantic failures into stable JSON the UI can render. Learning note 01-14: Chat responses include kind plan, help, decline, or error so the front end can branch predictably. Learning note 01-15: Greeting messages like hello should return kind help with mission None, clearing any prior map overlay. Learning note 01-16: Static JavaScript modules import map and playback helpers without inline event handlers. Learning note 01-17: API routes live in a dedicated module included after orchestrator construction. Learning note 01-18: Next chapters load site TOML; this one focuses on persistence seams around orchestrator.chat.
 
 ## Files
 
 - `src/robot_copilot/main.py`
 - `src/robot_copilot/store.py`
+- `src/robot_copilot/orchestrator.py`
 - `src/robot_copilot/api.py`
 
 ## Walkthrough
 
-1. Open `main.py` and study `create_app`, the only place that wires the stack together. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+1. Id generation resumes after restarts by scanning every persisted table for the highest `idNNNN` suffix.
 
-```python
-def create_app(
-    settings: AppSettings | None = None,
-    *,
-    provider: LLMProvider | None = None,
-    clock: Callable[[], datetime] | None = None,
-    id_factory: Callable[[], str] | None = None,
-) -> FastAPI:
-    settings = settings or load_settings(dotenv_enabled=True)
-    site = load_site(settings.site_path)
-    vehicles = load_vehicles(settings.vehicles_path)
-    geometry = SiteGeometry.build(site)
-
-    db_path = settings.db_url.replace("sqlite:///", "")
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-
-    clock_fn = clock or (lambda: datetime.now(tz=UTC))
-    store = Store.from_url(settings.db_url, clock_fn, id_factory)
-    prov = provider or build_provider(settings)
-    configure_redaction(settings.api_key)
-    install_redact_filter()
-
-    orchestrator = Orchestrator(prov, store, site, geometry, vehicles, settings, clock_fn)
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        yield
-        await prov.aclose()
-
-    app = FastAPI(
-        docs_url=None,
-        redoc_url=None,
-        openapi_url=None,
-        lifespan=lifespan,
-    )
-    templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-    static_dir = Path(__file__).parent / "static"
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-    @app.get("/", response_class=HTMLResponse)
-    def index(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(
-            request,
-            "index.html",
-            {"version": __version__},
-        )
-
-    app.include_router(build_router(orchestrator, settings, site.name))
-
-    @app.exception_handler(RequestValidationError)
-    async def validation_error_handler(
-        _request: Request, exc: RequestValidationError
-    ) -> JSONResponse:
-        errors = [
-            {"loc": err["loc"], "msg": err["msg"], "type": err["type"]} for err in exc.errors()
-        ]
-        return JSONResponse(status_code=422, content={"detail": errors})
-
-    from robot_copilot.security import RequestGuardMiddleware
-
-    app.add_middleware(
-        RequestGuardMiddleware,
-        allowed_hosts=settings.allowed_hosts,
-        max_body_bytes=settings.max_body_bytes,
-    )
-
-    app.state.orchestrator = orchestrator
-    app.state.settings = settings
-    return app
-```
-
-The factory disables OpenAPI URLs, mounts static assets, registers the API router, scrubs validation echoes, and installs request-guard middleware after the orchestrator exists. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
-2. Next inspect `bootstrap_id_factory` in `store.py`, which scans existing rows before issuing new `id####` values. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+<!-- segment: src/robot_copilot/store.py bootstrap_id_factory -->
 
 ```python
 def bootstrap_id_factory(engine: Engine) -> Callable[[], str]:
@@ -110,55 +36,50 @@ def bootstrap_id_factory(engine: Engine) -> Callable[[], str]:
     return gen
 ```
 
-Scanning every persisted table prevents duplicate ids when a container restarts with the same SQLite file. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
+The factory closure increments a counter so new rows stay sortable during demos without UUIDs.
 
-3. Finally read the `/healthz` handler in `api.py`, which proves the database connection is alive. Skim imports at the top of the module when a helper name in the excerpt is unfamiliar.
+2. Store.from_url is the supported entry for tests and production: it builds the engine, creates schema, and injects ids.
+
+<!-- segment: src/robot_copilot/store.py Store.from_url -->
 
 ```python
-    @router.get("/healthz", response_model=HealthView)
-    def healthz(request: Request) -> HealthView:
-        from sqlmodel import Session
-
-        store = orchestrator._store
-        with Session(store._engine) as session:
-            session.connection().exec_driver_sql("SELECT 1")
-        return HealthView(
-            status="ok",
-            provider=settings.provider.value,
-            model=settings.model,
-            site=site_name,
-            version=__version__,
-            instance=settings.instance_nonce,
-        )
+    def from_url(
+        cls,
+        url: str,
+        clock: Callable[[], datetime],
+        id_factory: Callable[[], str] | None = None,
+    ) -> Store:
+        engine = create_engine(url, connect_args={"check_same_thread": False})
+        SQLModel.metadata.create_all(engine)
+        ids = id_factory or bootstrap_id_factory(engine)
+        return cls(engine, clock, ids)
 ```
 
-Health checks return provider, model, site name, and an instance nonce so Playwright tests can detect accidental process reuse. Scroll one screen above and below the excerpt in your editor to see private helpers and logging hooks.
-
+Passing a custom id_factory is rare but useful when you need deterministic sequences in property tests.
 ## Try it
 
-From the repo root:
-
 ```bash
-RCC_DOTENV=off .venv/bin/python -c "
+RCC_DOTENV=off uv run --no-sync python -c "
 from fastapi.testclient import TestClient
 from robot_copilot.main import create_app
 from robot_copilot.settings import load_settings
 from tests.helpers import default_settings_env
 s = load_settings(env=default_settings_env(), dotenv_enabled=False)
-r = TestClient(create_app(s), base_url='http://localhost').get('/healthz')
-print(r.status_code, r.json()['status'], r.json()['site'])
+c = TestClient(create_app(s), base_url='http://localhost')
+r = c.post('/api/chat', json={'message':'hello','vehicle':'drone','battery_pct':80}).json()
+print(r['kind'], r.get('mission'))
 "
 ```
 
-Expected:
+### Expected
 
 ```
-200 ok Applycoding Demo Farm
+help None
 ```
 
 ## Exercise
 
-Trace POST `/api/chat` from `api.py` into `orchestrator.chat` and list the three persistence rows created on first contact (conversation, user message, assistant message). When you finish, run the checkpoint pytest node to confirm your understanding matches automated expectations.
+Trace POST /api/chat into orchestrator.chat and list persistence rows created on first contact.
 
 ## Checkpoint
 

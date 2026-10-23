@@ -111,6 +111,8 @@ async function sendChat() {
   renderMission(res.mission);
   if (res.mission?.path_preview) {
     initMap(res.mission.path_preview);
+  } else if (res.kind === "help" || !res.mission) {
+    initMap([]);
   }
   el("chat-input").value = "";
 }
