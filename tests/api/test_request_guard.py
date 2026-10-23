@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -34,11 +36,13 @@ def test_bad_origin(guarded_client: TestClient):
 
 
 def test_non_json_content_type(guarded_client: TestClient):
-    r = guarded_client.post(
-        "/api/chat",
-        data="x",
-        headers={"Content-Type": "text/plain"},
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        r = guarded_client.post(
+            "/api/chat",
+            content=b"x",
+            headers={"Content-Type": "text/plain"},
+        )
     assert r.status_code == 415
     assert guarded_client.spy.calls == 0  # type: ignore[attr-defined]
 

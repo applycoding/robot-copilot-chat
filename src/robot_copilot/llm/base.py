@@ -57,6 +57,7 @@ class ProviderResult(BaseModel):
     kind: Literal["plan", "decline", "text", "malformed"]
     tool_args: dict[str, object] | None = None
     text: str | None = None
+    adjustment_notice: str | None = None
     malformed_reason: MalformedReason | None = None
     provider: str
     model: str

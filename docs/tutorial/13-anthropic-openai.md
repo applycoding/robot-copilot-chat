@@ -4,18 +4,6 @@
 
 Cloud providers wrap vendor SDKs but return the same ProviderResult shapes as the mock. Anthropic and OpenAI adapters map tool calls into propose and decline flows validated by orchestrator commits. Unit tests inject fake HTTP transports so CI never opens outbound sockets while still asserting tool-use plans parse correctly.
 
-AnthropicProvider wraps Messages API calls with tool definitions matching mock propose and decline shapes. propose maps SDK responses into ProviderResult objects consumed uniformly by orchestrator. _map_error translates transport failures, rate limits, and auth problems into ProviderError codes.
-
-OpenAIProvider shares parsing helpers where stop reasons and tool calls align with Anthropic flows. Tests inject mock HTTP transports so CI never opens outbound sockets during provider unit tests. API keys load from settings SecretStr fields redacted in repr output for safer logs.
-
-Tool schemas originate from tools.tool_specs to prevent drift across providers. Timeouts and retries read from config/app.toml, not hardcoded constants in provider classes. Malformed tool JSON triggers MALFORMED_OUTPUT issues after normalization fails validation.
-
-Provider concurrency semaphores still gate Anthropic calls even when keys are present. Operation timeouts cancel hung SDK calls with ProviderError timeout messages. Usage metadata captures token counts for future cost dashboards without affecting validation.
-
-Repair prompts reuse render_repair_message to build consistent textual context alongside tools. Anthropic tests lock request shapes when SDK upgrades change keyword arguments. OpenAI tests cover stop reasons that must not yield confirmable missions without tools.
-
-Registry construction selects Anthropic when RCC_PROVIDER environment variables request it. Missing keys raise SettingsError at startup rather than failing mysteriously on first chat. Students should compare mock regex routing with real tool-call payloads to see structural parity.
-
 ## Files
 
 - `src/robot_copilot/llm/anthropic_provider.py`

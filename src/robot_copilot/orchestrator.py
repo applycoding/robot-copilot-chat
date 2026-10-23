@@ -428,11 +428,16 @@ class Orchestrator:
         m3 = self._store.get_mission(m.id)
         saved_rev = self._store.get_latest_revision(m.id)
         assert m3 is not None
-        view = self._build_view(m3, saved_rev, ctx, report)
+        view = self._build_view(
+            m3, saved_rev, ctx, report, adjustment_notice=result.adjustment_notice
+        )
+        assistant_msg = assistant
+        if result.adjustment_notice:
+            assistant_msg = f"{result.adjustment_notice}\n\n{assistant_msg}"
         return ChatResponse(
             conversation_id=m.conversation_id,
             kind="plan",
-            assistant_message=assistant,
+            assistant_message=assistant_msg,
             mission=view,
         )
 
@@ -549,6 +554,7 @@ class Orchestrator:
         rev: MissionRevision | None,
         ctx: ValidationContext,
         report: ValidationReport | None = None,
+        adjustment_notice: str | None = None,
     ) -> MissionView:
         plan = None
         issues: list[ValidationIssue] = []
@@ -585,6 +591,7 @@ class Orchestrator:
             plan=plan,
             plan_hash=m.plan_hash,
             explanation=explanation,
+            adjustment_notice=adjustment_notice,
             issues=issues,
             stats=stats,
             path_preview=path_preview,

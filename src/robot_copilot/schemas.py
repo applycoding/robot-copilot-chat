@@ -52,6 +52,7 @@ class MissionView(BaseModel):
     plan: MissionPlan | None
     plan_hash: str | None
     explanation: str
+    adjustment_notice: str | None = None
     issues: list[ValidationIssue]
     stats: PlanStats | None
     path_preview: list[XYZ]

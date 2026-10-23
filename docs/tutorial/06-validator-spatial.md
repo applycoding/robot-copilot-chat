@@ -4,18 +4,6 @@
 
 Spatial checks expand named places into segments, then test geofence margins and keep-out volumes along each leg and along return-home shortcuts. The substation flyover chat phrase exists to produce enters_keep_out together with rth_path_blocked in one invalid mission. Understanding segment helpers clarifies why map previews can look fine while validation still fails.
 
-Spatial validation expands places into coordinates, then tests each leg against fences and keep-outs. segment_hits_keepout samples segment geometry with margins inherited from site configuration. rth_segment_blocked verifies return-home paths do not pierce forbidden volumes after mission legs.
-
-Altitude ceilings compare action altitudes against drone profile limits with clear issue params. Geofence violations use polygon inclusion tests with margin buffers similar to keep-out handling. Unknown places fail before spatial math when resolution cannot map a label to coordinates.
-
-Fly over substation mock plans intentionally enter keep-outs to produce teaching-friendly invalid missions. Spatial codes include enters_keep_out and rth_path_blocked often appearing together for flyover prompts. Path places generate multiple legs; each segment is tested independently for cumulative violations.
-
-Rover plans use zero altitude throughout spatial checks, reflecting ground navigation assumptions. Spatial results feed path_preview polylines displayed in the browser map for valid missions. Issue messages include distances and thresholds formatted later by explain_issue templates.
-
-Spatial validation never mutates plans; resolved plans come from earlier resolution passes. Keep-out names normalize identically to place names, keeping mock and validator behavior aligned. Tutorial chat phrase fly over the substation should yield invalid status with spatial codes listed.
-
-Regression tests lock substation scenarios so README warnings stay truthful after edits. Spatial failures block confirmation because hashes would otherwise authorize unsafe motion. Understanding segment tests helps you interpret map overlays versus actual forbidden regions.
-
 ## Files
 
 - `src/robot_copilot/validator/spatial.py`
@@ -24,24 +12,26 @@ Regression tests lock substation scenarios so README warnings stay truthful afte
 
 ## Walkthrough
 
-1. segment_hits_keepout wraps shapely intersections, returning true when a movement segment intersects buffered keep-out polygons.
+1. segment_keepouts_hit returns every keep-out zone a leg crosses, not only the first polygon in site order.
 
-<!-- segment: src/robot_copilot/validator/spatial.py segment_hits_keepout -->
+<!-- segment: src/robot_copilot/validator/spatial.py segment_keepouts_hit -->
 
 ```python
-def segment_hits_keepout(geometry: SiteGeometry, start: XYZ, end: XYZ) -> str | None:
-    if start.x_m == end.x_m and start.y_m == end.y_m:
-        pt = Point(start.x_m, start.y_m)
-        geom = pt
-    else:
-        geom = LineString([(start.x_m, start.y_m), (end.x_m, end.y_m)])
+def segment_keepouts_hit(geometry: SiteGeometry, start: XYZ, end: XYZ) -> list[str]:
+    """Return every keep-out name whose buffered polygon intersects the segment.
+
+    Keep-out margins from site TOML are applied when SiteGeometry is built.
+    """
+    geom = _segment_geom(start, end)
+    hits: list[str] = []
     for name, poly in geometry.keep_outs:
-        if poly.intersects(geom):
-            return name
-    return None
+        if not poly.intersects(geom):
+            continue
+        hits.append(name)
+    return hits
 ```
 
-Validators call this helper for each leg after places resolve to concrete coordinates.
+Resolve reports at most one enters_keep_out issue per zone name across the whole mission.
 
 2. rth_segment_blocked models return-home straight lines, catching plans that would exit through forbidden airspace during RTH.
 
@@ -89,4 +79,4 @@ Record spatial issue codes from a fly to substation chat and compare with flyove
 
 ## Checkpoint
 
-- `tests/unit/test_spatial.py::test_substation_keepout`
+- `tests/unit/test_spatial.py::test_segment_keepouts_hit_lists_every_zone_on_one_leg`

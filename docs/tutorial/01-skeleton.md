@@ -4,18 +4,6 @@
 
 FastAPI boots a single SQLite-backed application where chat, confirmation, and repair share one orchestrator and one store. This chapter follows persistence seams: how monotonic string ids survive restarts, how missions and runs relate, and why the mock provider is wired before routes go live. You will see where chat responses pick up kind plan versus kind help.
 
-FastAPI `create_app` wires site geometry, vehicles, orchestrator, templates, and guarded routers in a fixed order. The store encapsulates SQLModel engines, monotonic string ids, and transactional commits for chat outcomes. bootstrap_id_factory scans existing rows so restarted dev servers continue id sequences without collisions.
-
-Store.from_url creates tables on boot, which keeps docker-less tutorials approachable for new contributors. Orchestrator methods never open raw SQL; they call store helpers that enforce optimistic concurrency. Conversation generation counters let new chat supersede stale missions awaiting confirmation.
-
-Mission revisions retain provider metadata per attempt so audits can reconstruct model provenance. Runs are unique per mission id, preventing double execution if a browser retries confirm. Clock injection supports deterministic created_at fields inside unit tests for id factories.
-
-Provider registry construction happens once per process, sharing timeouts loaded from app.toml. Lifespan hooks close provider HTTP clients cleanly when uvicorn shuts down. OpenAPI endpoints are disabled to reduce attack surface in classroom deployments.
-
-Validation error handler normalizes Pydantic failures into stable JSON the UI can render. Chat responses include kind plan, help, decline, or error so the front end can branch predictably. Greeting messages like hello should return kind help with mission None, clearing any prior map overlay.
-
-Static JavaScript modules import map and playback helpers without inline event handlers. API routes live in a dedicated module included after orchestrator construction. Next chapters load site TOML; this one focuses on persistence seams around orchestrator.chat.
-
 ## Files
 
 - `src/robot_copilot/main.py`

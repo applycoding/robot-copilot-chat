@@ -4,18 +4,6 @@
 
 Energy validation estimates watt-hours for mission legs plus conservative return-home legs using speeds and hover draws from vehicle profiles. Patrol loops multiply perimeter distance, so four laps at forty percent battery should fail with battery_insufficient before an operator confirms. Reserve watt-hours stay unavailable for outbound travel, mirroring real pack margins.
 
-Energy validation estimates watt-hours using distances, speeds, hover durations, and vehicle draws. rth_legs constructs return-home segments appended to mission legs for conservative battery accounting. rth_wh integrates power over return legs using the same velocity assumptions as outbound travel.
-
-Battery percent inputs convert to starting watt-hours via vehicle battery capacity tables. Reserve watt-hours remain unavailable for mission legs, enforcing safety margins from vehicles.toml. Patrol loops multiply perimeter legs; four loops at forty percent battery should fail with battery_insufficient.
-
-Inspect missions at low battery may still fail even when spatially valid, highlighting energy dominance. Stats on resolved plans include distance, duration, energy, and ending battery for UI copy. Energy issues attach end_wh params consumed by explain_issue when templates need extra detail.
-
-Regression guards ensure insufficient battery messages mention ending watt-hours where required. Energy checks run after structure and spatial passes so leg lists are complete. Return-home energy includes climb assumptions for drones when altitude must be shed before landing.
-
-Rover energy omits hover draw except when explicit hover actions appear in plans. Teaching scenarios use patrol phrases to demonstrate invalid missions without keep-out violations. Orchestrator surfaces invalid status to enable repair loops with structured briefs.
-
-Confirmation stays disabled while energy issues remain unresolved on the latest revision. Simulation uses resolved stats but does not recompute energy, trusting validator oracles. Tune vehicle.toml carefully; energy failures are often the first signal of unrealistic speeds.
-
 ## Files
 
 - `src/robot_copilot/validator/energy.py`

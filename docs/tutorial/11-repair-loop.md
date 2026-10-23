@@ -4,18 +4,6 @@
 
 Invalid missions can enter a bounded repair loop where the provider sees structured issue briefs instead of raw validator dumps. Orchestrator.repair reserves attempts with optimistic concurrency, and provider failures still consume budget via commit_repair_failure. Provider calls share the asyncio semaphore sized from settings.provider_concurrency, which tests/unit/test_settings.py asserts defaults to four alongside the mock provider.
 
-Repair reuses provider propose with structured issue briefs instead of raw validator JSON dumps. Orchestrator.repair checks mission status, repair_attempts, and max_repairs before reserving attempts. reserve_repair uses optimistic concurrency so parallel repair clicks do not double consume budget.
-
-Provider failures during repair still increment attempts via commit_repair_failure paths. repair_exhausted status tells the UI to stop offering repair buttons for that mission. Mock repair can fix energy issues by adjusting plans when prompts include sufficient guidance.
-
-Issue briefs carry codes, action indexes, and messages aligned with explain_issue templates. Repair responses use kind plan when a new valid revision is committed successfully. Stale repair requests return conflict codes so clients reload mission state before retrying.
-
-max_repairs defaults come from settings and should be covered by API tests, not fictional guard suites. Provider concurrency semaphores apply equally to repair and initial chat provider calls. tests/unit/test_settings.py asserts provider_concurrency equals four from config/app.toml defaults.
-
-Conversation locks serialize repair commits per thread while allowing global semaphore throttling. Repair does not bypass confirmation; operators must still hash-confirm valid revisions. Audit events note repair attempts for later review in teaching scenarios about autonomy governance.
-
-Structured briefs keep token usage stable compared to embedding entire previous plans. Invalid missions retain previous plan JSON in revisions table for diff-friendly audits. Understanding repair aids debugging when classroom chats produce almost-correct mock missions.
-
 ## Files
 
 - `src/robot_copilot/orchestrator.py`

@@ -42,7 +42,7 @@ Open http://localhost:8000. No API keys required. Loopback only.
 | survey the pond at 150 m | invalid, then repair to 120 m |
 | fly to the neighbor's house | unknown place |
 | fly over the substation | keep-out |
-| patrol the perimeter four times (40% battery) | battery repair |
+| patrol the perimeter four times (40% battery) | invalid battery; two repairs shorten patrol from 4 to 2 to 1 loop (shown in plan summary before confirm) |
 | fly to the pond at 30 m (rover) | vehicle mismatch, then repair |
 | drop the payload on the barn | decline |
 

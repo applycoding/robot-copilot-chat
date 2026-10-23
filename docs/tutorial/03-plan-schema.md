@@ -4,18 +4,6 @@
 
 Mission plans are typed Pydantic models, not loose JSON blobs. This chapter connects HTTP ChatRequest bodies to validate, the single entry for structure, spatial, and energy passes. You will see why mutually exclusive fields like place versus xy are rejected at parse time and how issue codes stay stable for explanations and repair briefs.
 
-MissionPlan bundles vehicle, summary, and an ordered action list validated by Pydantic models. ChatRequest carries conversation id, user text, vehicle choice, and battery percent into orchestrator.chat. Goto actions require exactly one of place or xy, preventing ambiguous targets from reaching spatial code.
-
-Takeoff and land actions include altitudes vetted later against vehicle profiles and structure rules. Hover seconds must be positive floats; photo actions optionally carry human labels for playback markers. return_home terminates sequences and triggers energy return legs independent of explicit land commands.
-
-Raw JSON schema tests lock provider tool shapes so cloud models cannot invent new action types silently. validate orchestrates structure, spatial, and energy passes, accumulating Issue objects with stable codes. ValidationContext threads site, geometry, vehicle profile, and battery percentage through each pass.
-
-Reports include ok flag, issues, resolved plan, stats, and plan_hash used by confirmation and simulation. Decline tools capture provider refusals before a MissionPlan exists, mapping to kind decline responses. Repair context reuses the same schema with issue briefs fed back into provider prompts.
-
-Plan hashes cover canonical JSON so single-field edits change confirmation requirements predictably. Structure rules encode allowed action sequences per vehicle, rejecting rover takeoff early. Spatial rules consume resolved coordinates after place expansion and path indexing.
-
-Energy rules estimate watt-hours using speeds and hover draws from vehicle.toml parameters. Explanations read the same issue codes produced here, keeping UI copy aligned with validator truth. Understanding this entrypoint clarifies why provider output still requires deterministic gatekeeping.
-
 ## Files
 
 - `src/robot_copilot/schemas.py`

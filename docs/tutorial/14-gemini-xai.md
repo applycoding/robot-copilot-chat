@@ -4,18 +4,6 @@
 
 build_provider selects Gemini or xAI implementations from settings while reusing shared tool specs and normalize helpers. Gemini contract tests validate client configuration fields without calling live Google APIs. xAI reuses OpenAI client patterns with a different base URL and model identifiers, keeping registry growth explicit and testable.
 
-build_provider inspects settings.provider enum values and constructs the matching LLMProvider implementation. GeminiProvider configures Google GenAI clients with timeouts and retry policies from settings. Gemini function calling uses the same tool specs as Anthropic and OpenAI adapters.
-
-xAIProvider subclasses OpenAIProvider with a different base URL and model identifiers. Contract tests validate HttpOptions fields without calling live Google APIs during CI. Registry module stays tiny so adding providers requires explicit enumeration and tests.
-
-Gemini __init__ reads API keys and model names from AppSettings SecretStr fields. Provider names flow into audit logs and health endpoint output for operator clarity. Fail-closed HTTP transports in tests complement socket guards used elsewhere in the suite.
-
-Gemini retries relate to max_retries settings documented in config/app.toml comments. xAI shares OpenAI parsing because chat completion shapes align for tool calls. Provider construction occurs once per process inside create_app for connection reuse.
-
-Missing Gemini keys raise SettingsError messages naming required environment variables. Tool normalization enforces max arg bytes protecting SQLite from huge JSON blobs. Gemini tests include function call planning fixtures with deterministic fake responses.
-
-Students should trace registry branches when switching RCC_PROVIDER between gemini and xai. Cloud provider chapters assume mock-first understanding from earlier tutorial sections. Keep registry errors loud; silent fallbacks to mock would hide misconfiguration in demos.
-
 ## Files
 
 - `src/robot_copilot/llm/registry.py`
