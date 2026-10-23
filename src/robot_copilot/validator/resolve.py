@@ -24,7 +24,7 @@ from robot_copilot.validator.energy import (
 from robot_copilot.validator.issues import XYZ, Leg, PlanStats, ResolvedPlan, ValidationIssue
 from robot_copilot.validator.spatial import (
     rth_segment_blocked,
-    segment_hits_keepout,
+    segment_keepouts_hit,
     segment_outside_fence,
 )
 from robot_copilot.validator.structure import _resolve_target
@@ -254,8 +254,9 @@ def check_spatial_and_energy(
                     hint=hint,
                 )
             )
-        ko = segment_hits_keepout(ctx.geometry, leg.start, leg.end)
-        if ko and ko not in reported_keep_outs:
+        for ko in segment_keepouts_hit(ctx.geometry, leg.start, leg.end):
+            if ko in reported_keep_outs:
+                continue
             reported_keep_outs.add(ko)
             msg, hint = explain_issue(IssueCode.ENTERS_KEEP_OUT, leg.action_index, {"keep_out": ko})
             issues.append(

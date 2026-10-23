@@ -14,16 +14,29 @@ def segment_outside_fence(geometry: SiteGeometry, start: XYZ, end: XYZ) -> bool:
     return not geometry.fence_inset.covers(line)
 
 
-def segment_hits_keepout(geometry: SiteGeometry, start: XYZ, end: XYZ) -> str | None:
-    if start.x_m == end.x_m and start.y_m == end.y_m:
-        pt = Point(start.x_m, start.y_m)
-        geom = pt
-    else:
-        geom = LineString([(start.x_m, start.y_m), (end.x_m, end.y_m)])
+def _segment_geom(start: XYZ, end: XYZ):
+    if start.x_m == end.x_m and start.y_m == end.y_m and start.alt_m == end.alt_m:
+        return Point(start.x_m, start.y_m)
+    return LineString([(start.x_m, start.y_m), (end.x_m, end.y_m)])
+
+
+def segment_keepouts_hit(geometry: SiteGeometry, start: XYZ, end: XYZ) -> list[str]:
+    """Return every keep-out name whose buffered polygon intersects the segment.
+
+    Keep-out margins from site TOML are applied when SiteGeometry is built.
+    """
+    geom = _segment_geom(start, end)
+    hits: list[str] = []
     for name, poly in geometry.keep_outs:
-        if poly.intersects(geom):
-            return name
-    return None
+        if not poly.intersects(geom):
+            continue
+        hits.append(name)
+    return hits
+
+
+def segment_hits_keepout(geometry: SiteGeometry, start: XYZ, end: XYZ) -> str | None:
+    hits = segment_keepouts_hit(geometry, start, end)
+    return hits[0] if hits else None
 
 
 def rth_segment_blocked(

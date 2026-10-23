@@ -26,7 +26,7 @@ def main() -> None:
             "() => document.querySelector('[data-testid=\"mission-status\"]')"
             "?.textContent === 'valid'"
         )
-        page.screenshot(path=str(OUT / "01-plan.png"), full_page=True)
+        page.locator("main").screenshot(path=str(OUT / "01-plan.png"))
 
         page.fill("#battery-input", "40")
         page.fill("#chat-input", "patrol the perimeter four times")
@@ -46,7 +46,8 @@ def main() -> None:
             "() => document.querySelector('[data-testid=\"plan-summary\"]')"
             "?.textContent.includes('1 of 4 loops')"
         )
-        page.screenshot(path=str(OUT / "02-repair.png"), full_page=True)
+        page.locator("#messages").evaluate("el => { el.scrollTop = el.scrollHeight; }")
+        page.locator("main").screenshot(path=str(OUT / "02-repair.png"))
 
         page.click("#confirm-btn")
         page.wait_for_selector("#confirm-dialog")
@@ -57,7 +58,7 @@ def main() -> None:
         )
         page.click("#end-btn")
         page.wait_for_selector('[data-testid="playback-status"]')
-        page.screenshot(path=str(OUT / "03-executing.png"), full_page=True)
+        page.locator("main").screenshot(path=str(OUT / "03-executing.png"))
         browser.close()
 
 

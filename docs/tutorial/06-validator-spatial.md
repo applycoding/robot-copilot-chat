@@ -12,24 +12,26 @@ Spatial checks expand named places into segments, then test geofence margins and
 
 ## Walkthrough
 
-1. segment_hits_keepout wraps shapely intersections, returning true when a movement segment intersects buffered keep-out polygons.
+1. segment_keepouts_hit returns every keep-out zone a leg crosses, not only the first polygon in site order.
 
-<!-- segment: src/robot_copilot/validator/spatial.py segment_hits_keepout -->
+<!-- segment: src/robot_copilot/validator/spatial.py segment_keepouts_hit -->
 
 ```python
-def segment_hits_keepout(geometry: SiteGeometry, start: XYZ, end: XYZ) -> str | None:
-    if start.x_m == end.x_m and start.y_m == end.y_m:
-        pt = Point(start.x_m, start.y_m)
-        geom = pt
-    else:
-        geom = LineString([(start.x_m, start.y_m), (end.x_m, end.y_m)])
+def segment_keepouts_hit(geometry: SiteGeometry, start: XYZ, end: XYZ) -> list[str]:
+    """Return every keep-out name whose buffered polygon intersects the segment.
+
+    Keep-out margins from site TOML are applied when SiteGeometry is built.
+    """
+    geom = _segment_geom(start, end)
+    hits: list[str] = []
     for name, poly in geometry.keep_outs:
-        if poly.intersects(geom):
-            return name
-    return None
+        if not poly.intersects(geom):
+            continue
+        hits.append(name)
+    return hits
 ```
 
-Validators call this helper for each leg after places resolve to concrete coordinates.
+Resolve reports at most one enters_keep_out issue per zone name across the whole mission.
 
 2. rth_segment_blocked models return-home straight lines, catching plans that would exit through forbidden airspace during RTH.
 

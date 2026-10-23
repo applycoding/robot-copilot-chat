@@ -21,6 +21,7 @@ SECTIONS = [
 _SEGMENT = re.compile(r"<!-- segment: (\S+) ([\w.]+) -->\s*```python\n(.*?)```", re.DOTALL)
 _PY_FENCE = re.compile(r"```python\n(.*?)```", re.DOTALL)
 _BASH_FENCE = re.compile(r"## Try it\s*(.*?)\s*### Expected", re.DOTALL)
+_SENTENCE = re.compile(r"[.!?]\s+")
 
 
 def _prose_words(text: str) -> int:
@@ -37,6 +38,34 @@ def test_tutorial_files():
             assert sec in text, f"{matches[0].name} missing {sec}"
         prose = _prose_words(text)
         assert 60 <= prose <= 220, f"{matches[0].name} prose word count {prose}"
+
+
+def _prose_text(text: str) -> str:
+    return re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+
+
+def _sentences_8plus(text: str) -> list[str]:
+    raw = _prose_text(text)
+    raw = re.sub(r"<!--.*?-->", "", raw, flags=re.DOTALL)
+    parts = _SENTENCE.split(raw)
+    out: list[str] = []
+    for part in parts:
+        words = re.findall(r"\w+", part)
+        if len(words) >= 8:
+            norm = " ".join(w.lower() for w in words)
+            out.append(norm)
+    return out
+
+
+def test_tutorial_no_duplicate_sentences_across_chapters():
+    seen: dict[str, str] = {}
+    for path in sorted(TUTORIAL.glob("*.md")):
+        for sentence in _sentences_8plus(path.read_text()):
+            if sentence in seen:
+                raise AssertionError(
+                    f"duplicate sentence in {path.name} and {seen[sentence]}: {sentence[:80]}..."
+                )
+            seen[sentence] = path.name
 
 
 def test_tutorial_no_robotic_goal_filler():

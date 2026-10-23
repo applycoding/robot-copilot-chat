@@ -76,9 +76,9 @@
     ],
     "walkthrough": [
       [
-        "segment_hits_keepout wraps shapely intersections, returning true when a movement segment intersects buffered keep-out polygons.",
+        "segment_keepouts_hit returns every keep-out zone a leg crosses, not only the first polygon in site order.",
         0,
-        "Validators call this helper for each leg after places resolve to concrete coordinates."
+        "Resolve reports at most one enters_keep_out issue per zone name across the whole mission."
       ],
       [
         "rth_segment_blocked models return-home straight lines, catching plans that would exit through forbidden airspace during RTH.",
@@ -89,7 +89,7 @@
     "try_bash": "RCC_DOTENV=off uv run --no-sync python -c \"\nfrom fastapi.testclient import TestClient\nfrom robot_copilot.main import create_app\nfrom robot_copilot.settings import load_settings\nfrom tests.helpers import default_settings_env\ns = load_settings(env=default_settings_env(), dotenv_enabled=False)\nc = TestClient(create_app(s), base_url='http://localhost')\nr = c.post('/api/chat', json={'message':'fly over the substation','vehicle':'drone','battery_pct':80}).json()\ncodes = [i['code'] for i in r['mission']['issues']]\nprint(r['mission']['status'], codes[0], codes[1])\n\"",
     "try_expected": ["invalid enters_keep_out rth_path_blocked"],
     "exercise": "Record spatial issue codes from a fly to substation chat and compare with flyover phrasing.",
-    "checkpoint": ["tests/unit/test_spatial.py::test_substation_keepout"]
+    "checkpoint": ["tests/unit/test_spatial.py::test_segment_keepouts_hit_lists_every_zone_on_one_leg"]
   },
   {
     "fname": "07-validator-energy.md",

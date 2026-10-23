@@ -60,6 +60,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-ra --strict-markers -m 'not e2e' --import-mode=importlib"
 filterwarnings = [
-    "error::DeprecationWarning:robot_copilot",
+    "error::DeprecationWarning",
+    "ignore::DeprecationWarning:shapely",
 ]
 markers = ["e2e: Playwright browser tests against a running server"]
