@@ -65,10 +65,12 @@ def test_id_factory_same_process_still_monotonic(tmp_path: Path):
     client1 = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(
         app1, base_url="http://localhost"
     )
-    mid1 = client1.post("/api/chat", json={"message": "inspect the north fence"}).json()["mission"]["id"]
+    r1 = client1.post("/api/chat", json={"message": "inspect the north fence"})
+    mid1 = r1.json()["mission"]["id"]
     app2 = create_app(settings)
     client2 = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(
         app2, base_url="http://localhost"
     )
-    mid2 = client2.post("/api/chat", json={"message": "take a photo of the barn"}).json()["mission"]["id"]
+    r2 = client2.post("/api/chat", json={"message": "take a photo of the barn"})
+    mid2 = r2.json()["mission"]["id"]
     assert int(mid2[2:]) > int(mid1[2:])
