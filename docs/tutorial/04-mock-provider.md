@@ -4,18 +4,6 @@
 
 The mock LLM provider proposes tool calls with zero network traffic, which keeps CI and classroom laptops reliable. You will trace regex routing from operator phrases to MissionPlan actions, including patrol, photo, and keep-out flyover demos. Canonical place lookup shares normalization with the site loader so BARN and the barn mean the same Barn target.
 
-MockProvider implements propose without network IO, enabling offline CI and classroom laptops alike. _canonical_place maps noisy operator strings onto canonical site names using SiteSummary aliases. _inspect_place expands path places into repeated goto-hover-photo sequences at optional altitudes.
-
-Regex handlers cover patrol loops, photos, hover timers, keep-out flyovers, and simple goto commands. Patrol plans wrap perimeter vertices with takeoff and return_home for drones but not rovers. Decline paths trigger when regex detects unsupported payload verbs like drop or spray.
-
-Repair mode rewrites plans using structured issue briefs rather than echoing full prior JSON. Normalization pipeline validates tool args sizes and required fields before orchestrator commits missions. Photo intents normalize to goto place plus hover dwell then photo action for drones.
-
-Keep-out flyovers may synthesize goto xy inside forbidden regions to teach spatial failures. Site summary tools expose place counts so prompts stay compact for real providers too. Mock model id flows into audit metadata identical to cloud providers for uniform dashboards.
-
-Provider results distinguish text, plan, and decline kinds consumed by orchestrator._commit_chat. Tool specs declare JSON schemas shared with Anthropic and OpenAI adapters in later chapters. Uppercase aliases like BARN should still resolve to Barn thanks to normalize_name in canonicalization.
-
-Tests lock regex behavior so tutorial phrases in README stay synchronized with validator expectations. Understanding mock routing helps you debug chat flows before spending cloud tokens. This provider is not a toy; it encodes the same tool contracts production models must honor.
-
 ## Files
 
 - `src/robot_copilot/llm/mock.py`

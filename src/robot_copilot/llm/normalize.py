@@ -18,6 +18,7 @@ def normalize(
     model: str,
     max_args_bytes: int,
     max_text_chars: int = 4000,
+    adjustment_notice: str | None = None,
 ) -> ProviderResult:
     usage = Usage()
     truncated = (text or "")[:max_text_chars] if text else None
@@ -111,6 +112,7 @@ def normalize(
                     provider=provider,
                     model=model,
                     usage=usage,
+                    adjustment_notice=adjustment_notice,
                 )
             DeclineRequest.model_validate_json(json.dumps(parsed, allow_nan=False))
             return ProviderResult(

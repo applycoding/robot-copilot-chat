@@ -4,18 +4,6 @@
 
 Validators emit IssueCode values and param dicts; explanations turn those into operator sentences and short remediation hints. Templates use Python format placeholders filled per issue instance, and step prefixes derive from action_index for multi-step plans. describe_plan composes visit summaries used in confirmation copy and playback titles.
 
-explain_issue maps IssueCode values to operator sentences and short remediation hints. Templates use Python format placeholders filled from validator param dicts per issue instance. Step prefixes derive from action_index so multi-step plans read naturally in the UI.
-
-describe_plan composes visit sentences, takeoff lines, and statistics into confirmation summaries. _plan_visit_segments groups gotos and photos per place for readable visit summaries. Distance, duration, and energy appear with consistent unit formatting helpers.
-
-Rover copy uses dock language while drone copy mentions landing at home. describe_report falls back to issue messages when plans are not ok, truncating long lists. describe_decline converts provider decline tools into chat-friendly sentences.
-
-Explanations never leak secrets; they consume already redacted issue messages only. North Fence describe_plan tests lock phrasing used in browser confirmation dialogs. Unknown place templates optionally append suggestion clauses when params include aliases.
-
-Battery insufficient templates can mention ending watt-hours when params provide end_wh. Explanation modules stay free of FastAPI imports so unit tests remain lightweight. Orchestrator stores explanation strings on mission views returned to the browser.
-
-Repair prompts include issue briefs distilled from the same codes templates understand. Changing IssueCode enums requires updating templates and pytest snapshots together. Readable copy is part of safety culture; operators should not read raw JSON in modals.
-
 ## Files
 
 - `src/robot_copilot/validator/explain.py`

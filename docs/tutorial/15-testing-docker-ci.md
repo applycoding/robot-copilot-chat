@@ -4,18 +4,6 @@
 
 pytest layout separates unit, API, provider, scenario, and Playwright smoke tiers. scrub_env fixtures strip API keys so tests fail closed when environment leaks occur. Farm day scenario tests replay JSON transcripts against a real app instance, while hygiene tests grep static assets for inline handlers and docker pins document immutable base images.
 
-scrub_env fixture removes provider API keys so tests fail closed when env leaks occur. Orchestrator.__init__ builds asyncio semaphores from settings.provider_concurrency defaults. Farm day scenario tests replay JSON transcripts against live FastAPI apps without manual clicking.
-
-Property tests mutate valid plans to match analytic oracle expectations across validator modules. Socket guards detect accidental outbound connections during provider unit tests. Playwright smoke tests use free ports and per-run SQLite paths to avoid shard collisions.
-
-CI pins Dockerfile base images with immutable hashes commented for reproducibility. Hygiene tests grep static JavaScript for innerHTML assignments and inline script patterns. Tutorial walkthrough tests validate prose length, excerpt overlap, and try-it commands automatically.
-
-RCC_DOTENV off is standard for pytest and documentation commands to ignore developer secrets. conftest load_ctx fixtures build ValidationContext objects shared by unit and integration suites. Docker builds package uv environments matching lockfiles committed beside pyproject.toml.
-
-Scenario tests assert HTTP 409 patterns for stale confirms and repair limits using real clients. Regression guards encode product decisions like battery messaging parameters expected in UI. Repo tests ensure tutorial python excerpts map to whole AST nodes between ten and sixty lines.
-
-Parallel CI assumes provider concurrency four unless settings tests prove otherwise. Testing chapters should be read before attempting to modify GitHub workflow pins. Students ought to run tutorial checkpoint nodes after each chapter to confirm understanding.
-
 ## Files
 
 - `tests/conftest.py`

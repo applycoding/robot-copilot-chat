@@ -123,6 +123,17 @@ button.secondary {
   color: #24292f;
 }
 
+.plan-summary {
+  font-weight: 600;
+  margin: 0.25rem 0;
+}
+
+.adjustment-notice {
+  color: #8b4513;
+  font-size: 0.95rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
 #mission-status {
   font-weight: 600;
   text-transform: uppercase;

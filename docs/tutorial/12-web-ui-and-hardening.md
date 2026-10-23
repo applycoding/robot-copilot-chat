@@ -4,18 +4,6 @@
 
 The browser client is plain modules served from FastAPI, while RequestGuardMiddleware rejects bad hosts, bad origins, oversize bodies, and unexpected content types before route code runs. Chunked uploads return 413 without draining the socket, which matters for slowloris-style abuse in classroom deployments. Chat JavaScript clears map overlays when responses are help text or lack a mission so stale paths never linger.
 
-RequestGuardMiddleware wraps the ASGI app to reject bad hosts, origins, and oversize bodies early. _read_post_body enforces maximum bytes and handles chunked uploads without draining attackers. JSON-only POST requirements keep unexpected content types from reaching Pydantic parsers.
-
-Allowed host lists come from settings and are enforced before route handlers execute. Static JavaScript modules avoid inline HTML handlers; hygiene tests grep for dangerous patterns. Chat client clears map overlays when responses are help text or lack missions.
-
-initMap accepts path preview polylines for valid missions and empty arrays to reset state. Templates use autoescape for HTML rendering of version strings and site titles. CSP-minded deployments rely on static mounts instead of third-party script tags.
-
-Chunked upload attacks return HTTP 413 quickly via early abort semantics in body readers. Bad host headers yield 400 responses with bad_host codes for observability. Browser fetches site geometry on load to draw fences independent of mission state.
-
-Playback and map modules split concerns so UI changes do not entangle API security. Confirm dialogs show explanation text produced by describe_plan for operator readability. Repair and confirm buttons respect mission capability flags returned by orchestrator views.
-
-API errors map to Thrown Error objects in fetch helpers with detail payloads intact. Teaching deployments should still run behind TLS terminators enforcing real host allowlists. Security modules stay free of business logic to keep audits focused and comprehensible.
-
 ## Files
 
 - `src/robot_copilot/security.py`

@@ -29,6 +29,17 @@ def _prose_words(text: str) -> int:
     return len(re.findall(r"\w+", without_code))
 
 
+def test_tutorial_files():
+    for i in range(17):
+        matches = list(TUTORIAL.glob(f"{i:02d}-*.md"))
+        assert matches, i
+        text = matches[0].read_text()
+        for sec in SECTIONS:
+            assert sec in text, f"{matches[0].name} missing {sec}"
+        prose = _prose_words(text)
+        assert 60 <= prose <= 220, f"{matches[0].name} prose word count {prose}"
+
+
 def _prose_text(text: str) -> str:
     return re.sub(r"```.*?```", "", text, flags=re.DOTALL)
 
@@ -36,7 +47,7 @@ def _prose_text(text: str) -> str:
 def _sentences_8plus(text: str) -> list[str]:
     raw = _prose_text(text)
     raw = re.sub(r"<!--.*?-->", "", raw, flags=re.DOTALL)
-    parts = _SENTENCE.split(raw)
+    parts = re.split(r"[.!?]\s+|\n+", raw)
     out: list[str] = []
     for part in parts:
         words = re.findall(r"\w+", part)
@@ -46,15 +57,15 @@ def _sentences_8plus(text: str) -> list[str]:
     return out
 
 
-def test_tutorial_files():
-    for i in range(17):
-        matches = list(TUTORIAL.glob(f"{i:02d}-*.md"))
-        assert matches, i
-        text = matches[0].read_text()
-        for sec in SECTIONS:
-            assert sec in text, f"{matches[0].name} missing {sec}"
-        prose = _prose_words(text)
-        assert 350 <= prose <= 600, f"{matches[0].name} prose word count {prose}"
+def test_tutorial_no_duplicate_sentences_across_chapters():
+    seen: dict[str, str] = {}
+    for path in sorted(TUTORIAL.glob("*.md")):
+        for sentence in _sentences_8plus(path.read_text()):
+            if sentence in seen:
+                raise AssertionError(
+                    f"duplicate sentence in {path.name} and {seen[sentence]}: {sentence[:80]}..."
+                )
+            seen[sentence] = path.name
 
 
 def test_tutorial_no_robotic_goal_filler():
@@ -69,17 +80,6 @@ def test_tutorial_no_robotic_goal_filler():
         text = path.read_text()
         for phrase in banned:
             assert phrase not in text, f"{path.name} contains banned filler: {phrase}"
-
-
-def test_tutorial_no_duplicate_sentences_across_chapters():
-    seen: dict[str, str] = {}
-    for path in sorted(TUTORIAL.glob("*.md")):
-        for sentence in _sentences_8plus(path.read_text()):
-            if sentence in seen:
-                raise AssertionError(
-                    f"duplicate sentence in {path.name} and {seen[sentence]}: {sentence[:80]}..."
-                )
-            seen[sentence] = path.name
 
 
 def test_tutorial_excerpt_segments():

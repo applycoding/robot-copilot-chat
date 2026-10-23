@@ -91,17 +91,17 @@
   "06-validator-spatial.md": [
     {
       "rel": "src/robot_copilot/validator/spatial.py",
-      "qualname": "segment_hits_keepout",
-      "text": "def segment_hits_keepout(geometry: SiteGeometry, start: XYZ, end: XYZ) -> str | None:\n    if start.x_m == end.x_m and start.y_m == end.y_m:\n        pt = Point(start.x_m, start.y_m)\n        geom = pt\n    else:\n        geom = LineString([(start.x_m, start.y_m), (end.x_m, end.y_m)])\n    for name, poly in geometry.keep_outs:\n        if poly.intersects(geom):\n            return name\n    return None\n",
-      "lineno": 17,
-      "end_lineno": 26
+      "qualname": "segment_keepouts_hit",
+      "text": "def segment_keepouts_hit(geometry: SiteGeometry, start: XYZ, end: XYZ) -> list[str]:\n    \"\"\"Return every keep-out name whose buffered polygon intersects the segment.\n\n    Keep-out margins from site TOML are applied when SiteGeometry is built.\n    \"\"\"\n    geom = _segment_geom(start, end)\n    hits: list[str] = []\n    for name, poly in geometry.keep_outs:\n        if not poly.intersects(geom):\n            continue\n        hits.append(name)\n    return hits\n",
+      "lineno": 23,
+      "end_lineno": 34
     },
     {
       "rel": "src/robot_copilot/validator/spatial.py",
       "qualname": "rth_segment_blocked",
       "text": "def rth_segment_blocked(\n    geometry: SiteGeometry, x: float, y: float, home: tuple[float, float]\n) -> bool:\n    hx, hy = home\n    if x == hx and y == hy:\n        return False\n    line = LineString([(x, y), (hx, hy)])\n    if not geometry.fence_inset.covers(line):\n        return True\n    return any(poly.intersects(line) for _, poly in geometry.keep_outs)\n",
-      "lineno": 29,
-      "end_lineno": 38
+      "lineno": 42,
+      "end_lineno": 51
     }
   ],
   "07-validator-energy.md": [
