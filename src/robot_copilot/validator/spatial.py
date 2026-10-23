@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from shapely.geometry import LineString, Point
+from shapely.geometry.base import BaseGeometry
 
 from robot_copilot.geometry import SiteGeometry
 from robot_copilot.validator.issues import XYZ
@@ -14,7 +15,7 @@ def segment_outside_fence(geometry: SiteGeometry, start: XYZ, end: XYZ) -> bool:
     return not geometry.fence_inset.covers(line)
 
 
-def _segment_geom(start: XYZ, end: XYZ):
+def _segment_geom(start: XYZ, end: XYZ) -> BaseGeometry:
     if start.x_m == end.x_m and start.y_m == end.y_m and start.alt_m == end.alt_m:
         return Point(start.x_m, start.y_m)
     return LineString([(start.x_m, start.y_m), (end.x_m, end.y_m)])
