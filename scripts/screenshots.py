@@ -6,4 +6,5 @@ import runpy
 from pathlib import Path
 
 if __name__ == "__main__":
-    runpy.run_path(str(Path(__file__).with_name("capture_readme_screenshots.py")), run_name="__main__")
+    target = Path(__file__).with_name("capture_readme_screenshots.py")
+    runpy.run_path(str(target), run_name="__main__")

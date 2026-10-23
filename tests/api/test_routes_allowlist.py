@@ -1,11 +1,10 @@
 from robot_copilot.main import create_app
 from robot_copilot.settings import load_settings
+from tests.helpers import default_settings_env
 
 
 def test_routes():
-    app = create_app(
-        load_settings(env={"RCC_DOTENV": "off", "RCC_ROOT": "/workspace"}, dotenv_enabled=False)
-    )
+    app = create_app(load_settings(env=default_settings_env(), dotenv_enabled=False))
 
     def collect(routes):
         out = set()

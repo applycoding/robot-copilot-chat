@@ -23,12 +23,13 @@ def main() -> None:
 
         page.fill("#chat-input", "survey the pond at 150 m")
         page.click("#send-btn")
+        status = '[data-testid="mission-status"]'
         page.wait_for_function(
-            "() => document.querySelector('[data-testid=\"mission-status\"]')?.textContent === 'invalid'"
+            f"() => document.querySelector('{status}')?.textContent === 'invalid'"
         )
         page.click("#repair-btn")
         page.wait_for_function(
-            "() => document.querySelector('[data-testid=\"mission-status\"]')?.textContent === 'valid'"
+            f"() => document.querySelector('{status}')?.textContent === 'valid'"
         )
         page.screenshot(path=str(OUT / "02-repair.png"), full_page=True)
 

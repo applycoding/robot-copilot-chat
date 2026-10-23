@@ -10,17 +10,18 @@ from robot_copilot.site import (
     resolve_place,
     suggest_places,
 )
+from tests.helpers import default_settings_env
 
 
 def test_demo_site_loads():
-    s = load_settings(env={"RCC_DOTENV": "off", "RCC_ROOT": "/workspace"}, dotenv_enabled=False)
+    s = load_settings(env=default_settings_env(), dotenv_enabled=False)
     site = load_site(s.site_path)
     assert site.name
     assert len(site.places) >= 5
 
 
 def test_normalize_and_resolve():
-    s = load_settings(env={"RCC_DOTENV": "off", "RCC_ROOT": "/workspace"}, dotenv_enabled=False)
+    s = load_settings(env=default_settings_env(), dotenv_enabled=False)
     site = load_site(s.site_path)
     assert normalize_name("the BARN.") == normalize_name("barn")
     assert resolve_place(site, "barn") is not None
