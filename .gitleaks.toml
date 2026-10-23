@@ -1,0 +1,11 @@
+title = "robot-copilot-chat gitleaks"
+
+[allowlist]
+description = "Fake keys used in tests only"
+regexTarget = "match"
+regexes = [
+  '''^sk-ant-fake-sentinel-key-for-tests-only$''',
+  '''^sk-fake-openai-sentinel-key$''',
+  '''^fake-gemini-sentinel-key$''',
+  '''^xai-fake-sentinel-key$''',
+]

@@ -1,0 +1,558 @@
+[
+  {
+    "fname": "05-validator-structure.md",
+    "title": "05 Structure validation",
+    "topic": "action sequencing rules",
+    "bullets": [
+      "Structure validation enforces allowed action sequences before any geometry computations run.",
+      "validate_structure walks actions while tracking flight state for drones and drive state for rovers.",
+      "Rover missions reject takeoff because ground vehicles cannot leave the terrain model used here.",
+      "Drone missions require takeoff before goto unless operating under explicit hover-only teaching examples.",
+      "Land and return_home transitions reset altitude expectations checked later by spatial modules.",
+      "Issue helpers attach action_index so explanations can cite step numbers understood by operators.",
+      "_issue centralizes code construction with optional params consumed by explain_issue templates.",
+      "Unsupported verbs for a vehicle emit unsupported_action_for_vehicle with the offending index.",
+      "Empty action lists fail fast with dedicated codes rather than confusing spatial errors.",
+      "Photo actions without prior goto may be flagged depending on vehicle and teaching policy encoded in tables.",
+      "Structure rules cooperate with provider mock templates so intentionally bad plans surface in pytest.",
+      "Validation short-circuits on first structural failure when configured, keeping reports easy to read.",
+      "Mission summaries do not affect structure results; only typed actions matter here.",
+      "Structure issues still include stable codes exportable to repair briefs for provider prompts.",
+      "Downstream spatial validation assumes structure already rejected impossible state transitions.",
+      "Teaching stacks use structure tests to show why typed plans beat free-form natural language.",
+      "Rover takeoff plans demonstrate False outcomes with explicit enum values in tutorials.",
+      "After editing structure tables, update unit tests and tutorial checkpoints together."
+    ],
+    "files": [
+      "src/robot_copilot/validator/structure.py",
+      "src/robot_copilot/validator/issues.py",
+      "tests/unit/test_structure.py"
+    ],
+    "walkthrough": [
+      [
+        "validate_structure is the authoritative transition table for mission actions per vehicle profile.",
+        0,
+        "When it returns issues, later passes may still run for diagnostics but ok stays false."
+      ],
+      [
+        "_issue builds Issue records with consistent param dicts used by explanation templates and repair briefs.",
+        1,
+        "Centralizing construction avoids duplicated string formatting across validator modules."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync python -c \"\nfrom robot_copilot.plan import MissionPlan, Takeoff, Land\nfrom robot_copilot.validator import validate\nfrom robot_copilot.validator.context import ValidationContext\nfrom robot_copilot.site import load_site\nfrom robot_copilot.geometry import SiteGeometry\nfrom robot_copilot.vehicles import load_vehicles\nfrom pathlib import Path\nsite = load_site(Path('config/sites/demo_farm.toml'))\ngeom = SiteGeometry.build(site)\nvehicles = load_vehicles(Path('config/vehicles.toml'))\nctx = ValidationContext(site=site, geometry=geom, vehicle=vehicles['rover'], battery_pct=80)\nplan = MissionPlan(vehicle='rover', summary='bad', actions=(Takeoff(type='takeoff', altitude_m=5), Land(type='land')))\nr = validate(plan, ctx)\nprint(r.ok, r.issues[0].code.value)\n\"",
+    "try_expected": ["False unsupported_action_for_vehicle"],
+    "exercise": "Name the flight state immediately after a drone takeoff according to validate_structure.",
+    "checkpoint": ["tests/unit/test_structure.py::test_rover_takeoff_rejected"]
+  },
+  {
+    "fname": "06-validator-spatial.md",
+    "title": "06 Spatial validation",
+    "topic": "geofence and keep-out checks",
+    "bullets": [
+      "Spatial validation expands places into coordinates, then tests each leg against fences and keep-outs.",
+      "segment_hits_keepout samples segment geometry with margins inherited from site configuration.",
+      "rth_segment_blocked verifies return-home paths do not pierce forbidden volumes after mission legs.",
+      "Altitude ceilings compare action altitudes against drone profile limits with clear issue params.",
+      "Geofence violations use polygon inclusion tests with margin buffers similar to keep-out handling.",
+      "Unknown places fail before spatial math when resolution cannot map a label to coordinates.",
+      "Fly over substation mock plans intentionally enter keep-outs to produce teaching-friendly invalid missions.",
+      "Spatial codes include enters_keep_out and rth_path_blocked often appearing together for flyover prompts.",
+      "Path places generate multiple legs; each segment is tested independently for cumulative violations.",
+      "Rover plans use zero altitude throughout spatial checks, reflecting ground navigation assumptions.",
+      "Spatial results feed path_preview polylines displayed in the browser map for valid missions.",
+      "Issue messages include distances and thresholds formatted later by explain_issue templates.",
+      "Spatial validation never mutates plans; resolved plans come from earlier resolution passes.",
+      "Keep-out names normalize identically to place names, keeping mock and validator behavior aligned.",
+      "Tutorial chat phrase fly over the substation should yield invalid status with spatial codes listed.",
+      "Regression tests lock substation scenarios so README warnings stay truthful after edits.",
+      "Spatial failures block confirmation because hashes would otherwise authorize unsafe motion.",
+      "Understanding segment tests helps you interpret map overlays versus actual forbidden regions."
+    ],
+    "files": [
+      "src/robot_copilot/validator/spatial.py",
+      "src/robot_copilot/geometry.py",
+      "tests/unit/test_spatial.py"
+    ],
+    "walkthrough": [
+      [
+        "segment_hits_keepout wraps shapely intersections, returning true when a movement segment intersects buffered keep-out polygons.",
+        0,
+        "Validators call this helper for each leg after places resolve to concrete coordinates."
+      ],
+      [
+        "rth_segment_blocked models return-home straight lines, catching plans that would exit through forbidden airspace during RTH.",
+        1,
+        "Energy and spatial modules both reason about return paths, but only spatial emits rth_path_blocked issues."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync python -c \"\nfrom fastapi.testclient import TestClient\nfrom robot_copilot.main import create_app\nfrom robot_copilot.settings import load_settings\nfrom tests.helpers import default_settings_env\ns = load_settings(env=default_settings_env(), dotenv_enabled=False)\nc = TestClient(create_app(s), base_url='http://localhost')\nr = c.post('/api/chat', json={'message':'fly over the substation','vehicle':'drone','battery_pct':80}).json()\ncodes = [i['code'] for i in r['mission']['issues']]\nprint(r['mission']['status'], codes[0], codes[1])\n\"",
+    "try_expected": ["invalid enters_keep_out rth_path_blocked"],
+    "exercise": "Record spatial issue codes from a fly to substation chat and compare with flyover phrasing.",
+    "checkpoint": ["tests/unit/test_spatial.py::test_substation_keepout"]
+  },
+  {
+    "fname": "07-validator-energy.md",
+    "title": "07 Energy validation",
+    "topic": "battery and return-home watt-hours",
+    "bullets": [
+      "Energy validation estimates watt-hours using distances, speeds, hover durations, and vehicle draws.",
+      "rth_legs constructs return-home segments appended to mission legs for conservative battery accounting.",
+      "rth_wh integrates power over return legs using the same velocity assumptions as outbound travel.",
+      "Battery percent inputs convert to starting watt-hours via vehicle battery capacity tables.",
+      "Reserve watt-hours remain unavailable for mission legs, enforcing safety margins from vehicles.toml.",
+      "Patrol loops multiply perimeter legs; four loops at forty percent battery should fail with battery_insufficient.",
+      "Inspect missions at low battery may still fail even when spatially valid, highlighting energy dominance.",
+      "Stats on resolved plans include distance, duration, energy, and ending battery for UI copy.",
+      "Energy issues attach end_wh params consumed by explain_issue when templates need extra detail.",
+      "Regression guards ensure insufficient battery messages mention ending watt-hours where required.",
+      "Energy checks run after structure and spatial passes so leg lists are complete.",
+      "Return-home energy includes climb assumptions for drones when altitude must be shed before landing.",
+      "Rover energy omits hover draw except when explicit hover actions appear in plans.",
+      "Teaching scenarios use patrol phrases to demonstrate invalid missions without keep-out violations.",
+      "Orchestrator surfaces invalid status to enable repair loops with structured briefs.",
+      "Confirmation stays disabled while energy issues remain unresolved on the latest revision.",
+      "Simulation uses resolved stats but does not recompute energy, trusting validator oracles.",
+      "Tune vehicle.toml carefully; energy failures are often the first signal of unrealistic speeds."
+    ],
+    "files": [
+      "src/robot_copilot/validator/energy.py",
+      "config/vehicles.toml",
+      "tests/unit/test_energy.py"
+    ],
+    "walkthrough": [
+      [
+        "rth_legs mirrors outbound geometry to estimate the path home, including altitude changes where applicable.",
+        0,
+        "Leg tuples feed both energy summations and spatial return checks in separate modules."
+      ],
+      [
+        "rth_wh integrates power across return segments using profile cruise and hover watt draws.",
+        1,
+        "Adding return energy after mission legs prevents optimistic battery readings during long patrols."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync python -c \"\nfrom fastapi.testclient import TestClient\nfrom robot_copilot.main import create_app\nfrom robot_copilot.settings import load_settings\nfrom tests.helpers import default_settings_env\ns = load_settings(env=default_settings_env(), dotenv_enabled=False)\nc = TestClient(create_app(s), base_url='http://localhost')\nr = c.post('/api/chat', json={'message':'patrol the perimeter four times','vehicle':'drone','battery_pct':40}).json()\nprint(r['kind'], r['mission']['status'], r['mission']['issues'][0]['code'])\n\"",
+    "try_expected": ["plan invalid battery_insufficient"],
+    "exercise": "Open a valid North Fence inspect report and copy distance, duration, and energy fields.",
+    "checkpoint": ["tests/unit/test_regression_guards.py::test_battery_insufficient_includes_end_wh_param"]
+  },
+  {
+    "fname": "08-explanations.md",
+    "title": "08 Human-readable explanations",
+    "topic": "issue templates and plan copy",
+    "bullets": [
+      "explain_issue maps IssueCode values to operator sentences and short remediation hints.",
+      "Templates use Python format placeholders filled from validator param dicts per issue instance.",
+      "Step prefixes derive from action_index so multi-step plans read naturally in the UI.",
+      "describe_plan composes visit sentences, takeoff lines, and statistics into confirmation summaries.",
+      "_plan_visit_segments groups gotos and photos per place for readable visit summaries.",
+      "Distance, duration, and energy appear with consistent unit formatting helpers.",
+      "Rover copy uses dock language while drone copy mentions landing at home.",
+      "describe_report falls back to issue messages when plans are not ok, truncating long lists.",
+      "describe_decline converts provider decline tools into chat-friendly sentences.",
+      "Explanations never leak secrets; they consume already redacted issue messages only.",
+      "North Fence describe_plan tests lock phrasing used in browser confirmation dialogs.",
+      "Unknown place templates optionally append suggestion clauses when params include aliases.",
+      "Battery insufficient templates can mention ending watt-hours when params provide end_wh.",
+      "Explanation modules stay free of FastAPI imports so unit tests remain lightweight.",
+      "Orchestrator stores explanation strings on mission views returned to the browser.",
+      "Repair prompts include issue briefs distilled from the same codes templates understand.",
+      "Changing IssueCode enums requires updating templates and pytest snapshots together.",
+      "Readable copy is part of safety culture; operators should not read raw JSON in modals."
+    ],
+    "files": [
+      "src/robot_copilot/validator/explain.py",
+      "src/robot_copilot/validator/issues.py",
+      "tests/unit/test_explain.py"
+    ],
+    "walkthrough": [
+      [
+        "explain_issue selects template pairs, formats messages, and returns hint strings for UI tooltips.",
+        0,
+        "KeyError guards keep explanations resilient when params omit optional formatting fields."
+      ],
+      [
+        "describe_plan turns resolved stats into a single paragraph suitable for confirm dialogs and audit logs.",
+        1,
+        "Visit aggregation collapses repeated gotos to the same place into one readable clause."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync python -c \"\nfrom robot_copilot.validator.explain import explain_issue\nfrom robot_copilot.validator.issues import IssueCode\nmsg, hint = explain_issue(IssueCode.ALTITUDE_HIGH, 0, {'altitude_m': 120, 'max': 80})\nprint(msg)\nprint(hint)\n\"",
+    "try_expected": [
+      "Step 1: Altitude 120 m exceeds the maximum 80 m.",
+      "Try 80 m or lower."
+    ],
+    "exercise": "Add a fake IssueCode template on a branch and observe pytest failures until removed.",
+    "checkpoint": ["tests/unit/test_explain.py::test_describe_plan_north_fence"]
+  },
+  {
+    "fname": "09-simulator.md",
+    "title": "09 Local simulator",
+    "topic": "frames and playback",
+    "bullets": [
+      "simulate consumes ok ValidationReport objects and refuses tampered or unresolved inputs.",
+      "Frame generation uses ceil(duration/dt) semantics so motion does not undershoot leg endpoints.",
+      "_final_from_frames aggregates terminal pose, battery, and landed flags for playback summaries.",
+      "Photo events emit once per photo action even when multiple frames overlap the pose.",
+      "SafetyInvariantError paths mark runs aborted while retaining frames for debugging.",
+      "North Fence inspect plans produce hundreds of frames; pytest locks counts against dt choices.",
+      "Simulator revalidates keep-out and geofence along piecewise linear frame paths as a belt-and-suspenders check.",
+      "Runs stored in SQLite include frame arrays consumed by browser playback.js.",
+      "Executed status means simulation finished without invariant violations during frame checks.",
+      "plan_hash must match report hash before simulate proceeds, tying execution to confirmation.",
+      "Drone frames include altitude; rover frames pin altitude to zero throughout trajectories.",
+      "Final battery watt-hours should match resolved stats within tight floating tolerances.",
+      "Orchestrator confirm triggers simulation after successful hash validation and CAS commit.",
+      "Playback UI steps frames sequentially using timestamps derived from dt.",
+      "Tutorial operators can run simulate directly without HTTP when exploring north_fence_plan_json.",
+      "Aborted runs still return telemetry so instructors can show students what went wrong visually.",
+      "Simulation never calls providers; it only deterministically replays validated geometry.",
+      "Frame count tests guard against accidental changes to dt or speed defaults."
+    ],
+    "files": [
+      "src/robot_copilot/sim/simulator.py",
+      "src/robot_copilot/sim/telemetry.py",
+      "tests/unit/test_simulator.py"
+    ],
+    "walkthrough": [
+      [
+        "simulate builds frames, photos, and final state, returning SimResult with executed or aborted status.",
+        0,
+        "NotValidatedError raises when reports are not ok or hashes diverge, protecting teaching invariants."
+      ],
+      [
+        "_final_from_frames inspects the last frame, combining landed detection with battery bookkeeping fields.",
+        1,
+        "Playback markers rely on this summary to show operators where missions ended geographically."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync python -c \"\nfrom robot_copilot.sim.simulator import simulate\nfrom robot_copilot.validator import validate\nfrom tests.helpers import load_ctx, north_fence_plan_json, plan_from_json\nctx = load_ctx()\nrep = validate(plan_from_json(north_fence_plan_json()), ctx)\nsim = simulate(rep, ctx)\nprint(len(sim.frames), sim.status == 'executed')\n\"",
+    "try_expected": ["364 True"],
+    "exercise": "Compare final_frame coordinates with final_state in run JSON after confirm in the UI.",
+    "checkpoint": ["tests/unit/test_simulator.py::test_frame_count_and_endpoints"]
+  },
+  {
+    "fname": "10-confirmation.md",
+    "title": "10 Confirmation and execution",
+    "topic": "plan hash CAS",
+    "bullets": [
+      "Confirmation requires clients to POST the plan_hash shown alongside valid missions.",
+      "Orchestrator._confirm verifies mission status, hash equality, and optimistic concurrency before simulation.",
+      "Store.commit_confirmation writes runs, updates mission status, and records audit events atomically.",
+      "Wrong hashes return HTTP 409 with plan_hash_mismatch detail codes for programmatic clients.",
+      "Confirm TTL from settings retires stale missions that operators left open too long.",
+      "Double confirm attempts should fail cleanly without creating duplicate run rows.",
+      "Generation counters invalidate confirms when new chat supersedes awaiting missions.",
+      "Executed missions hide confirm buttons in the UI and freeze repair affordances.",
+      "Simulation starts only after confirmation succeeds, never directly from chat responses.",
+      "Audit trails capture operator intent even when confirmation fails due to hash drift.",
+      "Mission revisions store plan JSON snapshots used to recompute hashes for comparisons.",
+      "Browser execute flow posts confirm then initializes playback with returned frames.",
+      "CAS failures surface stale conflict codes so clients can refresh mission views.",
+      "Teaching stacks emphasize hashes because JSON pretty-printing can change without semantic edits.",
+      "Hash algorithms live in validator modules to keep confirm and simulate aligned.",
+      "Provider changes between chat and confirm should change hashes, blocking outdated confirms.",
+      "Integration tests cover wrong hash paths without needing manual UI clicking.",
+      "Portfolio discussions should mention human confirmation as authorization, not cosmetic UX."
+    ],
+    "files": [
+      "src/robot_copilot/orchestrator.py",
+      "src/robot_copilot/store.py",
+      "tests/api/test_confirm_guard.py"
+    ],
+    "walkthrough": [
+      [
+        "Orchestrator._confirm orchestrates hash checks, store CAS, and simulate invocation behind a conversation lock.",
+        0,
+        "ConflictError mapping ensures API layer returns consistent HTTP status codes for each failure mode."
+      ],
+      [
+        "Store.commit_confirmation persists run telemetry and flips mission status to executed or aborted based on simulation.",
+        1,
+        "SQLite transactions keep runs unique per mission id even under concurrent client retries."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync python -c \"\nfrom fastapi.testclient import TestClient\nfrom robot_copilot.main import create_app\nfrom robot_copilot.settings import load_settings\nfrom tests.helpers import default_settings_env\ns = load_settings(env=default_settings_env(), dotenv_enabled=False)\nc = TestClient(create_app(s), base_url='http://localhost')\nchat = c.post('/api/chat', json={'message':'photo of barn','vehicle':'drone','battery_pct':80}).json()\nmid = chat['mission']['id']\nbad = c.post('/api/missions/' + mid + '/confirm', json={'plan_hash':'0'*64})\nprint(bad.status_code, bad.json()['detail']['code'])\n\"",
+    "try_expected": ["409 plan_hash_mismatch"],
+    "exercise": "Inspect audit events after a failed confirm and note the stored reason for hash mismatch.",
+    "checkpoint": ["tests/api/test_confirm_guard.py::test_wrong_hash_no_run"]
+  },
+  {
+    "fname": "11-repair-loop.md",
+    "title": "11 Repair loop",
+    "topic": "provider rework and attempt limits",
+    "bullets": [
+      "Repair reuses provider propose with structured issue briefs instead of raw validator JSON dumps.",
+      "Orchestrator.repair checks mission status, repair_attempts, and max_repairs before reserving attempts.",
+      "reserve_repair uses optimistic concurrency so parallel repair clicks do not double consume budget.",
+      "Provider failures during repair still increment attempts via commit_repair_failure paths.",
+      "repair_exhausted status tells the UI to stop offering repair buttons for that mission.",
+      "Mock repair can fix energy issues by adjusting plans when prompts include sufficient guidance.",
+      "Issue briefs carry codes, action indexes, and messages aligned with explain_issue templates.",
+      "Repair responses use kind plan when a new valid revision is committed successfully.",
+      "Stale repair requests return conflict codes so clients reload mission state before retrying.",
+      "max_repairs defaults come from settings and should be covered by API tests, not fictional guard suites.",
+      "Provider concurrency semaphores apply equally to repair and initial chat provider calls.",
+      "tests/unit/test_settings.py asserts provider_concurrency equals four from config/app.toml defaults.",
+      "Conversation locks serialize repair commits per thread while allowing global semaphore throttling.",
+      "Repair does not bypass confirmation; operators must still hash-confirm valid revisions.",
+      "Audit events note repair attempts for later review in teaching scenarios about autonomy governance.",
+      "Structured briefs keep token usage stable compared to embedding entire previous plans.",
+      "Invalid missions retain previous plan JSON in revisions table for diff-friendly audits.",
+      "Understanding repair aids debugging when classroom chats produce almost-correct mock missions."
+    ],
+    "files": [
+      "src/robot_copilot/orchestrator.py",
+      "src/robot_copilot/store.py",
+      "tests/api/test_repair_flow.py"
+    ],
+    "walkthrough": [
+      [
+        "Orchestrator.repair loads latest revision issues, builds RepairContext, and calls the provider under the shared semaphore.",
+        0,
+        "ProviderError paths finish via commit_repair_failure so attempts are not silently lost."
+      ],
+      [
+        "Store.commit_repair_failure updates mission status to invalid or repair_exhausted while persisting audit metadata.",
+        1,
+        "Generation counters ensure repairs do not resurrect missions from superseded conversations."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync pytest tests/unit/test_settings.py::test_mock_default -q --no-header",
+    "try_expected": ["1 passed"],
+    "exercise": "Read provider_concurrency in config/app.toml and confirm tests/unit/test_settings.py pins it to four.",
+    "checkpoint": ["tests/api/test_repair_provider_error.py::test_repair_provider_error_unsticks_mission"]
+  },
+  {
+    "fname": "12-web-ui-and-hardening.md",
+    "title": "12 Web UI and hardening",
+    "topic": "request guards and static client",
+    "bullets": [
+      "RequestGuardMiddleware wraps the ASGI app to reject bad hosts, origins, and oversize bodies early.",
+      "_read_post_body enforces maximum bytes and handles chunked uploads without draining attackers.",
+      "JSON-only POST requirements keep unexpected content types from reaching Pydantic parsers.",
+      "Allowed host lists come from settings and are enforced before route handlers execute.",
+      "Static JavaScript modules avoid inline HTML handlers; hygiene tests grep for dangerous patterns.",
+      "Chat client clears map overlays when responses are help text or lack missions.",
+      "initMap accepts path preview polylines for valid missions and empty arrays to reset state.",
+      "Templates use autoescape for HTML rendering of version strings and site titles.",
+      "CSP-minded deployments rely on static mounts instead of third-party script tags.",
+      "Chunked upload attacks return HTTP 413 quickly via early abort semantics in body readers.",
+      "Bad host headers yield 400 responses with bad_host codes for observability.",
+      "Browser fetches site geometry on load to draw fences independent of mission state.",
+      "Playback and map modules split concerns so UI changes do not entangle API security.",
+      "Confirm dialogs show explanation text produced by describe_plan for operator readability.",
+      "Repair and confirm buttons respect mission capability flags returned by orchestrator views.",
+      "API errors map to Thrown Error objects in fetch helpers with detail payloads intact.",
+      "Teaching deployments should still run behind TLS terminators enforcing real host allowlists.",
+      "Security modules stay free of business logic to keep audits focused and comprehensible."
+    ],
+    "files": [
+      "src/robot_copilot/security.py",
+      "src/robot_copilot/static/app.js",
+      "tests/api/test_request_guard.py"
+    ],
+    "walkthrough": [
+      [
+        "_read_post_body accumulates POST payloads with strict byte caps, aborting reads once limits exceed settings.",
+        0,
+        "This function runs inside middleware before FastAPI instantiates request.form or json parsers."
+      ],
+      [
+        "RequestGuardMiddleware.__call__ inspects scope type, host headers, methods, and content lengths for every request.",
+        1,
+        "Rejected requests never acquire database connections, preserving SQLite under abusive traffic."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync python -c \"\nfrom fastapi.testclient import TestClient\nfrom robot_copilot.main import create_app\nfrom robot_copilot.settings import load_settings\nfrom tests.helpers import default_settings_env\ns = load_settings(env=default_settings_env(), dotenv_enabled=False)\nc = TestClient(create_app(s), base_url='http://evil')\nr = c.post('/api/chat', json={'message':'hi','vehicle':'drone','battery_pct':80})\nprint(r.status_code, r.json()['detail']['code'])\n\"",
+    "try_expected": ["400 bad_host"],
+    "exercise": "Verify script tags on / load modules from /static without inline onclick handlers.",
+    "checkpoint": ["tests/api/test_chunked_body.py::test_chunked_body_without_content_length_returns_413"]
+  },
+  {
+    "fname": "13-anthropic-openai.md",
+    "title": "13 Anthropic and OpenAI providers",
+    "topic": "tool-use adapters",
+    "bullets": [
+      "AnthropicProvider wraps Messages API calls with tool definitions matching mock propose and decline shapes.",
+      "propose maps SDK responses into ProviderResult objects consumed uniformly by orchestrator.",
+      "_map_error translates transport failures, rate limits, and auth problems into ProviderError codes.",
+      "OpenAIProvider shares parsing helpers where stop reasons and tool calls align with Anthropic flows.",
+      "Tests inject mock HTTP transports so CI never opens outbound sockets during provider unit tests.",
+      "API keys load from settings SecretStr fields redacted in repr output for safer logs.",
+      "Tool schemas originate from tools.tool_specs to prevent drift across providers.",
+      "Timeouts and retries read from config/app.toml, not hardcoded constants in provider classes.",
+      "Malformed tool JSON triggers MALFORMED_OUTPUT issues after normalization fails validation.",
+      "Provider concurrency semaphores still gate Anthropic calls even when keys are present.",
+      "Operation timeouts cancel hung SDK calls with ProviderError timeout messages.",
+      "Usage metadata captures token counts for future cost dashboards without affecting validation.",
+      "Repair prompts reuse render_repair_message to build consistent textual context alongside tools.",
+      "Anthropic tests lock request shapes when SDK upgrades change keyword arguments.",
+      "OpenAI tests cover stop reasons that must not yield confirmable missions without tools.",
+      "Registry construction selects Anthropic when RCC_PROVIDER environment variables request it.",
+      "Missing keys raise SettingsError at startup rather than failing mysteriously on first chat.",
+      "Students should compare mock regex routing with real tool-call payloads to see structural parity."
+    ],
+    "files": [
+      "src/robot_copilot/llm/anthropic_provider.py",
+      "src/robot_copilot/llm/openai_provider.py",
+      "tests/providers/test_anthropic.py"
+    ],
+    "walkthrough": [
+      [
+        "AnthropicProvider.propose assembles tools, messages, and repair context into a single SDK request.",
+        0,
+        "Responses pass through normalize before orchestrator sees ProviderResult instances."
+      ],
+      [
+        "_map_error centralizes failure classification so orchestrator can decide whether to surface chat errors or repair failures.",
+        1,
+        "Redaction runs on error strings before they reach logs or HTTP responses."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync pytest tests/providers/test_anthropic.py::test_tool_use_plan -q --no-header",
+    "try_expected": ["1 passed"],
+    "exercise": "Read tests/providers/test_openai.py for stop reasons that must not create confirmable missions.",
+    "checkpoint": ["tests/providers/test_anthropic.py::test_tool_use_plan"]
+  },
+  {
+    "fname": "14-gemini-xai.md",
+    "title": "14 Gemini and xAI providers",
+    "topic": "registry wiring",
+    "bullets": [
+      "build_provider inspects settings.provider enum values and constructs the matching LLMProvider implementation.",
+      "GeminiProvider configures Google GenAI clients with timeouts and retry policies from settings.",
+      "Gemini function calling uses the same tool specs as Anthropic and OpenAI adapters.",
+      "xAIProvider subclasses OpenAIProvider with a different base URL and model identifiers.",
+      "Contract tests validate HttpOptions fields without calling live Google APIs during CI.",
+      "Registry module stays tiny so adding providers requires explicit enumeration and tests.",
+      "Gemini __init__ reads API keys and model names from AppSettings SecretStr fields.",
+      "Provider names flow into audit logs and health endpoint output for operator clarity.",
+      "Fail-closed HTTP transports in tests complement socket guards used elsewhere in the suite.",
+      "Gemini retries relate to max_retries settings documented in config/app.toml comments.",
+      "xAI shares OpenAI parsing because chat completion shapes align for tool calls.",
+      "Provider construction occurs once per process inside create_app for connection reuse.",
+      "Missing Gemini keys raise SettingsError messages naming required environment variables.",
+      "Tool normalization enforces max arg bytes protecting SQLite from huge JSON blobs.",
+      "Gemini tests include function call planning fixtures with deterministic fake responses.",
+      "Students should trace registry branches when switching RCC_PROVIDER between gemini and xai.",
+      "Cloud provider chapters assume mock-first understanding from earlier tutorial sections.",
+      "Keep registry errors loud; silent fallbacks to mock would hide misconfiguration in demos."
+    ],
+    "files": [
+      "src/robot_copilot/llm/registry.py",
+      "src/robot_copilot/llm/gemini_provider.py",
+      "src/robot_copilot/llm/xai_provider.py"
+    ],
+    "walkthrough": [
+      [
+        "build_provider is the only supported switch statement for instantiating providers from AppSettings.",
+        0,
+        "New providers must register here and include tests/providers coverage before documentation claims support."
+      ],
+      [
+        "GeminiProvider.__init__ stores model id, API key, and HTTP options used on each propose call.",
+        1,
+        "Initialization does not ping the network; health checks remain separate from client construction."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync pytest tests/providers/test_gemini_contract.py -q --no-header",
+    "try_expected": ["1 passed"],
+    "exercise": "Relate Gemini retry settings in config/app.toml to max_retries loaded in settings.",
+    "checkpoint": ["tests/providers/test_gemini.py::test_gemini_function_call_plan"]
+  },
+  {
+    "fname": "15-testing-docker-ci.md",
+    "title": "15 Testing, Docker, and CI",
+    "topic": "harness and hygiene",
+    "bullets": [
+      "scrub_env fixture removes provider API keys so tests fail closed when env leaks occur.",
+      "Orchestrator.__init__ builds asyncio semaphores from settings.provider_concurrency defaults.",
+      "Farm day scenario tests replay JSON transcripts against live FastAPI apps without manual clicking.",
+      "Property tests mutate valid plans to match analytic oracle expectations across validator modules.",
+      "Socket guards detect accidental outbound connections during provider unit tests.",
+      "Playwright smoke tests use free ports and per-run SQLite paths to avoid shard collisions.",
+      "CI pins Dockerfile base images with immutable hashes commented for reproducibility.",
+      "Hygiene tests grep static JavaScript for innerHTML assignments and inline script patterns.",
+      "Tutorial walkthrough tests validate prose length, excerpt overlap, and try-it commands automatically.",
+      "RCC_DOTENV off is standard for pytest and documentation commands to ignore developer secrets.",
+      "conftest load_ctx fixtures build ValidationContext objects shared by unit and integration suites.",
+      "Docker builds package uv environments matching lockfiles committed beside pyproject.toml.",
+      "Scenario tests assert HTTP 409 patterns for stale confirms and repair limits using real clients.",
+      "Regression guards encode product decisions like battery messaging parameters expected in UI.",
+      "Repo tests ensure tutorial python excerpts map to whole AST nodes between ten and sixty lines.",
+      "Parallel CI assumes provider concurrency four unless settings tests prove otherwise.",
+      "Testing chapters should be read before attempting to modify GitHub workflow pins.",
+      "Students ought to run tutorial checkpoint nodes after each chapter to confirm understanding."
+    ],
+    "files": [
+      "tests/conftest.py",
+      "src/robot_copilot/orchestrator.py",
+      "tests/scenario/test_farm_day.py",
+      "tests/repo/test_hygiene.py"
+    ],
+    "walkthrough": [
+      [
+        "scrub_env deletes known API key environment variables before each test function runs.",
+        0,
+        "This complements default_settings_env by ensuring no hidden dotenv restores cloud credentials mid-suite."
+      ],
+      [
+        "Orchestrator.__init__ stores provider semaphore sized by provider_concurrency from loaded settings.",
+        1,
+        "tests/unit/test_settings.py asserts the default value four so tutorials and CI share the same expectation."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync pytest tests/scenario/test_farm_day.py::test_farm_day_scenario -q --no-header",
+    "try_expected": ["1 passed"],
+    "exercise": "Run tests/repo/test_hygiene.py and note which pattern forbids inline scripts in static assets.",
+    "checkpoint": ["tests/scenario/test_farm_day.py::test_farm_day_scenario"]
+  },
+  {
+    "fname": "16-extending.md",
+    "title": "16 Extending the stack",
+    "topic": "tools and site summaries",
+    "bullets": [
+      "tool_specs defines JSON schemas for propose and decline tools shared across providers.",
+      "build_site_summary compresses places and keep-outs into compact dicts for model prompts.",
+      "Adding a new action type requires plan schema updates, validator passes, simulator support, and mock routing.",
+      "Site summary point counts drive inspect loops without sending full coordinate arrays to models.",
+      "Extending demo_farm.toml demands demo site consistency tests and README updates together.",
+      "New vehicles need profiles in vehicles.toml plus structure rules and UI select options.",
+      "Tool arg byte limits protect SQLite from oversized provider payloads during normalize.",
+      "Registry changes must remain explicit; hidden auto-discovery of providers is intentionally avoided.",
+      "Hygiene and tutorial tests guard documentation quality when contributors add features.",
+      "Mock provider remains the reference implementation for tool-call behavior new clouds must match.",
+      "Path preview generation may need updates when new action types alter resolved leg lists.",
+      "Explain templates require IssueCode entries for any new validator failures introduced.",
+      "Simulation frame builders must understand geometry for new motion primitives you add.",
+      "API schemas and OpenAPI-disabled policy mean HTTP contracts change only with tests updated.",
+      "Consider property tests when adding validators to catch regressions across randomized plans.",
+      "Document new features in tutorial checkpoints only after pytest covers schema, validator, simulator, and mock paths.",
+      "Site summaries should stay small; prefer counts and names over dumping vertices.",
+      "Extension work is complete when farm day scenarios and tutorial try-it blocks still pass unchanged."
+    ],
+    "files": [
+      "src/robot_copilot/tools.py",
+      "src/robot_copilot/llm/mock.py",
+      "tests/unit/test_demo_site_consistency.py"
+    ],
+    "walkthrough": [
+      [
+        "tool_specs returns the tool definition list passed into Anthropic, OpenAI, and Gemini clients.",
+        0,
+        "Keeping schemas centralized prevents incompatible tool names across providers."
+      ],
+      [
+        "build_site_summary walks Site objects to produce prompt-friendly metadata used in ProposalRequest payloads.",
+        1,
+        "Place entries include kinds, aliases, and point counts consumed by mock canonicalization helpers."
+      ]
+    ],
+    "try_bash": "RCC_DOTENV=off uv run --no-sync pytest tests/unit/test_demo_site_consistency.py::test_patrol_calibration -q --no-header",
+    "try_expected": ["1 passed"],
+    "exercise": "Add a dummy alias in demo_farm.toml, run consistency tests, then revert the alias.",
+    "checkpoint": ["tests/unit/test_demo_site_consistency.py::test_patrol_calibration"]
+  }
+]

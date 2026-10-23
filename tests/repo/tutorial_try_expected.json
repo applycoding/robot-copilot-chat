@@ -1,0 +1,88 @@
+{
+  "00-overview.md": {
+    "expected_lines": [
+      "200 ok mock Applycoding Demo Farm"
+    ]
+  },
+  "01-skeleton.md": {
+    "expected_lines": [
+      "help None"
+    ]
+  },
+  "02-site-config.md": {
+    "expected_lines": [
+      "Barn"
+    ]
+  },
+  "03-plan-schema.md": {
+    "expected_lines": [
+      "Value error, exactly one of place or xy required"
+    ]
+  },
+  "04-mock-provider.md": {
+    "expected_lines": [
+      "Barn"
+    ]
+  },
+  "05-validator-structure.md": {
+    "expected_lines": [
+      "False unsupported_action_for_vehicle"
+    ]
+  },
+  "06-validator-spatial.md": {
+    "expected_lines": [
+      "invalid enters_keep_out rth_path_blocked"
+    ]
+  },
+  "07-validator-energy.md": {
+    "expected_lines": [
+      "plan invalid battery_insufficient"
+    ]
+  },
+  "08-explanations.md": {
+    "expected_lines": [
+      "Step 1: Altitude 120 m exceeds the maximum 80 m.",
+      "Try 80 m or lower."
+    ]
+  },
+  "09-simulator.md": {
+    "expected_lines": [
+      "364 True"
+    ]
+  },
+  "10-confirmation.md": {
+    "expected_lines": [
+      "409 plan_hash_mismatch"
+    ]
+  },
+  "11-repair-loop.md": {
+    "expected_lines": [
+      "1 passed"
+    ]
+  },
+  "12-web-ui-and-hardening.md": {
+    "expected_lines": [
+      "400 bad_host"
+    ]
+  },
+  "13-anthropic-openai.md": {
+    "expected_lines": [
+      "1 passed"
+    ]
+  },
+  "14-gemini-xai.md": {
+    "expected_lines": [
+      "1 passed"
+    ]
+  },
+  "15-testing-docker-ci.md": {
+    "expected_lines": [
+      "1 passed"
+    ]
+  },
+  "16-extending.md": {
+    "expected_lines": [
+      "1 passed"
+    ]
+  }
+}

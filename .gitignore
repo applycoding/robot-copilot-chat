@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+data/
+.venv/
+test-results/
+__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
