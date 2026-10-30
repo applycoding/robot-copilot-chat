@@ -12,7 +12,7 @@ dependencies = [
   "sqlmodel==0.0.48",
   "shapely==2.2.0",
   "anthropic==2.1.0",
-  "openai==3.37.0",
+  "openai==3.39.0",
   "google-genai==2.33.0",
 ]
 
